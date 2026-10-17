@@ -1,0 +1,99 @@
+--- pristine/src/api/webApiShim.ts	2026-08-21 19:47:40.302899756 +0000
++++ belvie-erp/src/api/webApiShim.ts	2026-08-26 18:57:27.028808393 +0000
+@@ -12,6 +12,39 @@
+ 
+ import { http } from "./httpClient";
+ 
++// ----------------------------------------------------------------------------
++// Sérialisation des paramètres de requête — POINT UNIQUE.
++//
++// new URLSearchParams({ statut: undefined }) produit littéralement
++// "statut=undefined" : la valeur est convertie en CHAÎNE, pas omise. Côté
++// serveur, req.query.statut vaut alors la chaîne "undefined", non vide donc
++// truthy, et une clause WHERE parasite s'ajoute — d'où zéro résultat.
++//
++// Les appelants passent couramment des filtres optionnels sous la forme
++// `{ statut: filtre || undefined }` : il est donc normal que des propriétés
++// undefined arrivent ici, et c'est à la sérialisation de les ignorer.
++//
++// Electron n'est pas concerné : preload.js transmet l'objet tel quel via IPC,
++// où undefined reste undefined et donc falsy. Ce correctif ne modifie en rien
++// son comportement.
++//
++// null et undefined sont omis. La chaîne vide est CONSERVÉE : elle peut être
++// un filtre légitime, et c'est à l'appelant de ne pas l'envoyer s'il n'en veut pas.
++function queryString(params?: unknown): string {
++  if (!params || typeof params !== "object") return "";
++  const usp = new URLSearchParams();
++  for (const [cle, valeur] of Object.entries(params as Record<string, unknown>)) {
++    if (valeur === undefined || valeur === null) continue;
++    if (Array.isArray(valeur)) {
++      for (const v of valeur) if (v !== undefined && v !== null) usp.append(cle, String(v));
++      continue;
++    }
++    usp.append(cle, String(valeur));
++  }
++  const s = usp.toString();
++  return s ? `?${s}` : "";
++}
++
+ function indisponible(nom: string) {
+   return () => { throw new Error(`${nom} n'est pas encore disponible dans la version web. Utilisez l'application Electron pour cette fonctionnalité.`); };
+ }
+@@ -34,7 +67,7 @@
+ };
+ 
+ const articles = {
+-  list: (opts?: unknown) => http.get(`/articles${opts ? "?" + new URLSearchParams(opts as any).toString() : ""}`),
++  list: (opts?: unknown) => http.get(`/articles${queryString(opts)}`),
+   get: (id: number) => http.get(`/articles/${id}`),
+   create: (payload: unknown) => http.post("/articles", payload),
+   completerReference: (id: number, payload: unknown) => http.patch(`/articles/${id}/reference`, payload),
+@@ -44,13 +77,13 @@
+ };
+ 
+ const etapes = {
+-  list: (opts?: unknown) => http.get(`/etapes${opts ? "?" + new URLSearchParams(opts as any).toString() : ""}`),
++  list: (opts?: unknown) => http.get(`/etapes${queryString(opts)}`),
+   update: (id: number, payload: unknown) => http.patch(`/etapes/${id}`, payload),
+   create: (payload: unknown) => http.post("/etapes", payload),
+ };
+ 
+ const listes = {
+-  list: (type: string, opts?: unknown) => http.get(`/listes/${type}${opts ? "?" + new URLSearchParams(opts as any).toString() : ""}`),
++  list: (type: string, opts?: unknown) => http.get(`/listes/${type}${queryString(opts)}`),
+   create: (type: string, nom: string, opts?: unknown) => http.post(`/listes/${type}`, { nom, ...(opts as object) }),
+   update: (id: number, patch: unknown) => http.patch(`/listes/${id}`, patch),
+ };
+@@ -69,11 +102,11 @@
+ };
+ 
+ const declinaisons = {
+-  listTypes: (options?: unknown) => http.get(`/declinaisons/types${options ? "?" + new URLSearchParams(options as any).toString() : ""}`),
++  listTypes: (options?: unknown) => http.get(`/declinaisons/types${queryString(options)}`),
+   createType: (nom: string, options?: unknown) => http.post("/declinaisons/types", { nom, ...(options as object) }),
+   updateType: (id: number, patch: unknown) => http.patch(`/declinaisons/types/${id}`, patch),
+   reorderTypes: (orderedIds: number[]) => http.post("/declinaisons/types/reordonner", { orderedIds }),
+-  listValeurs: (typeId: number, options?: unknown) => http.get(`/declinaisons/types/${typeId}/valeurs${options ? "?" + new URLSearchParams(options as any).toString() : ""}`),
++  listValeurs: (typeId: number, options?: unknown) => http.get(`/declinaisons/types/${typeId}/valeurs${queryString(options)}`),
+   createValeur: (typeId: number, valeur: string, options?: unknown) => http.post(`/declinaisons/types/${typeId}/valeurs`, { valeur, ...(options as object) }),
+   updateValeur: (id: number, patch: unknown) => http.patch(`/declinaisons/valeurs/${id}`, patch),
+   reorderValeurs: (typeId: number, orderedIds: number[]) => http.post(`/declinaisons/types/${typeId}/valeurs/reordonner`, { orderedIds }),
+@@ -83,7 +116,7 @@
+   articleHasVariantes: async (articleId: number) => (await http.get(`/declinaisons/articles/${articleId}/variantes`)).length > 0,
+   previsualiserImpact: (articleId: number, selections: unknown) => http.post(`/declinaisons/articles/${articleId}/previsualiser-impact`, { selections }),
+   appliquerConfiguration: (articleId: number, typeIds: number[], selections: unknown) => http.post(`/declinaisons/articles/${articleId}/appliquer-configuration`, { typeIds, selections }),
+-  listVariantes: (articleId: number, options?: unknown) => http.get(`/declinaisons/articles/${articleId}/variantes${options ? "?" + new URLSearchParams(options as any).toString() : ""}`),
++  listVariantes: (articleId: number, options?: unknown) => http.get(`/declinaisons/articles/${articleId}/variantes${queryString(options)}`),
+   getVariante: (id: number) => http.get(`/declinaisons/variantes/${id}`),
+   genererVariantes: (articleId: number, selections: unknown) => http.post(`/declinaisons/articles/${articleId}/generer-variantes`, { selections }),
+   updateVariante: (id: number, patch: unknown) => http.patch(`/declinaisons/variantes/${id}`, patch),
+@@ -91,7 +124,7 @@
+ };
+ 
+ const planning = {
+-  list: (filtres?: unknown) => http.get(`/planning${filtres ? "?" + new URLSearchParams(filtres as any).toString() : ""}`),
++  list: (filtres?: unknown) => http.get(`/planning${queryString(filtres)}`),
+   get: (id: number) => http.get(`/planning/${id}`),
+   kpis: () => http.get("/planning/kpis"),
+   creer: (payload: unknown) => http.post("/planning", payload),

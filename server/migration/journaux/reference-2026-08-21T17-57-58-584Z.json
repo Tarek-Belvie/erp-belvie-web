@@ -1,0 +1,725 @@
+{
+  "version": 3,
+  "phase": "precheck",
+  "date": "2026-08-21T17:57:56.276Z",
+  "source": {
+    "chemin": "C:\\Users\\User\\AppData\\Roaming\\belvie-erp\\belvie.db",
+    "sha": "635564193a4a7c1da2d1a41c901722e69d249b3e07f7a2d6542d8f6ec4928b09",
+    "taille": 561152,
+    "mtime": "2026-08-20T20:17:22.244Z"
+  },
+  "comptages": {
+    "listes_valeurs": 91,
+    "entreprise": 1,
+    "parametres": 2,
+    "etapes": 8,
+    "compteurs": 1,
+    "compteurs_bc_pf": 1,
+    "grilles_tailles": 2,
+    "declinaison_types": 7,
+    "grilles_tailles_valeurs": 18,
+    "declinaison_valeurs": 0,
+    "articles": 23,
+    "article_photos": 19,
+    "article_declinaison_types": 0,
+    "article_declinaison_valeurs": 0,
+    "article_variantes": 0,
+    "planning_articles": 21,
+    "article_variante_valeurs": 0,
+    "commandes": 35,
+    "commande_lignes": 403,
+    "historique_transitions": 58,
+    "bc_pf": 33,
+    "bc_pf_lignes": 403
+  },
+  "comptages_bruts": {
+    "listes_valeurs": 91,
+    "entreprise": 1,
+    "parametres": 2,
+    "etapes": 8,
+    "compteurs": 1,
+    "compteurs_bc_pf": 1,
+    "grilles_tailles": 2,
+    "declinaison_types": 7,
+    "grilles_tailles_valeurs": 18,
+    "declinaison_valeurs": 0,
+    "articles": 23,
+    "article_photos": 19,
+    "article_declinaison_types": 0,
+    "article_declinaison_valeurs": 0,
+    "article_variantes": 0,
+    "planning_articles": 21,
+    "article_variante_valeurs": 0,
+    "commandes": 40,
+    "commande_lignes": 408,
+    "historique_transitions": 58,
+    "bc_pf": 33,
+    "bc_pf_lignes": 403
+  },
+  "exclusions": {
+    "commandes": [
+      2,
+      1,
+      3,
+      5,
+      4
+    ],
+    "bc_pf": []
+  },
+  "agregats": {
+    "somme_quantite_totale": 8183,
+    "somme_lignes_quantite": 8183,
+    "commandes_par_statut": [
+      {
+        "statut": "annulee",
+        "n": 3
+      },
+      {
+        "statut": "brouillon",
+        "n": 2
+      },
+      {
+        "statut": "controle_qualite",
+        "n": 2
+      },
+      {
+        "statut": "en_production",
+        "n": 13
+      },
+      {
+        "statut": "validee",
+        "n": 15
+      }
+    ],
+    "max_id": {
+      "listes_valeurs": 91,
+      "grilles_tailles": 2,
+      "grilles_tailles_valeurs": 18,
+      "declinaison_types": 7,
+      "declinaison_valeurs": 0,
+      "articles": 23,
+      "article_photos": 21,
+      "article_declinaison_types": 0,
+      "article_declinaison_valeurs": 0,
+      "article_variantes": 0,
+      "article_variante_valeurs": 0,
+      "planning_articles": 21,
+      "etapes": 8,
+      "commandes": 43,
+      "commande_lignes": 3278,
+      "historique_transitions": 58,
+      "bc_pf": 39,
+      "bc_pf_lignes": 539
+    }
+  },
+  "schema": {
+    "listes_valeurs": {
+      "communes": [
+        "id",
+        "type",
+        "nom",
+        "nom_normalise",
+        "code",
+        "ordre",
+        "actif",
+        "created_at",
+        "responsable_nom",
+        "fournisseur_id"
+      ],
+      "ignorees": [
+        "reference_libre"
+      ],
+      "manquantes": []
+    },
+    "entreprise": {
+      "communes": [
+        "id",
+        "nom_commercial",
+        "raison_sociale",
+        "matricule_fiscal",
+        "registre_commerce",
+        "adresse",
+        "telephone",
+        "email",
+        "rib",
+        "logo_path",
+        "created_at",
+        "updated_at",
+        "banque",
+        "agence_bancaire",
+        "identifiant_tva",
+        "ville",
+        "code_postal",
+        "pays",
+        "site_web",
+        "swift_bic",
+        "taux_tva_defaut"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "parametres": {
+      "communes": [
+        "cle",
+        "valeur"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "etapes": {
+      "communes": [
+        "id",
+        "cle",
+        "libelle",
+        "pourcentage",
+        "ordre",
+        "optionnelle",
+        "actif"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "compteurs": {
+      "communes": [
+        "annee",
+        "dernier_numero"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "compteurs_bc_pf": {
+      "communes": [
+        "annee",
+        "dernier_numero"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "grilles_tailles": {
+      "communes": [
+        "id",
+        "nom",
+        "nom_normalise",
+        "actif",
+        "created_at"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "declinaison_types": {
+      "communes": [
+        "id",
+        "code",
+        "nom",
+        "nom_normalise",
+        "affichage_couleur",
+        "ordre",
+        "actif",
+        "created_at"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "grilles_tailles_valeurs": {
+      "communes": [
+        "id",
+        "grille_id",
+        "valeur",
+        "valeur_normalisee",
+        "ordre",
+        "actif"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "declinaison_valeurs": {
+      "communes": [
+        "id",
+        "declinaison_type_id",
+        "valeur",
+        "valeur_normalisee",
+        "couleur_hex",
+        "ordre",
+        "actif",
+        "created_at"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "articles": {
+      "communes": [
+        "id",
+        "uuid",
+        "produit_id",
+        "saison_id",
+        "annee_collection",
+        "rayon_id",
+        "categorie_id",
+        "abreviation",
+        "numero_sequentiel",
+        "reference_principale",
+        "est_demo",
+        "created_at",
+        "updated_at",
+        "prix_vente_envisage"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "article_photos": {
+      "communes": [
+        "id",
+        "article_id",
+        "photo_path",
+        "photo_thumb_path",
+        "est_principale",
+        "ordre",
+        "created_at"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "article_declinaison_types": {
+      "communes": [
+        "id",
+        "article_id",
+        "declinaison_type_id",
+        "ordre"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "article_declinaison_valeurs": {
+      "communes": [
+        "id",
+        "article_id",
+        "declinaison_type_id",
+        "declinaison_valeur_id"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "article_variantes": {
+      "communes": [
+        "id",
+        "article_id",
+        "sku",
+        "code_barres",
+        "reference_interne",
+        "actif",
+        "created_at",
+        "updated_at"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "planning_articles": {
+      "communes": [
+        "id",
+        "uuid",
+        "article_id",
+        "nom_provisoire",
+        "reference_provisoire",
+        "photo_path",
+        "photo_thumb_path",
+        "categorie_id",
+        "saison_id",
+        "annee_collection",
+        "mois_prevu",
+        "quantite_previsionnelle",
+        "coloris_previsionnels",
+        "statut",
+        "atelier_id",
+        "notes",
+        "ordre",
+        "produit_cree_le",
+        "archived",
+        "created_at",
+        "updated_at",
+        "produit_id",
+        "rayon_id",
+        "mois_prevu_production",
+        "mois_prevu_reception"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "article_variante_valeurs": {
+      "communes": [
+        "id",
+        "article_variante_id",
+        "declinaison_type_id",
+        "declinaison_valeur_id"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "commandes": {
+      "communes": [
+        "id",
+        "uuid",
+        "numero",
+        "article_id",
+        "type_production",
+        "numero_reassort",
+        "reference_production",
+        "responsable_nom",
+        "atelier_id",
+        "quantite_totale",
+        "date_lancement",
+        "date_fin_prevue",
+        "etape_id",
+        "statut",
+        "priorite",
+        "bloquee",
+        "blocage_motif",
+        "bloquee_le",
+        "bloquee_par_id",
+        "debloquee_le",
+        "debloquee_par_id",
+        "valide_le",
+        "valide_par_id",
+        "lance_le",
+        "lance_par_id",
+        "controle_qualite_le",
+        "controle_qualite_par_id",
+        "terminee_le",
+        "terminee_par_id",
+        "annulee_le",
+        "annulee_par_id",
+        "annulation_motif",
+        "archived_le",
+        "archived_par_id",
+        "desarchive_le",
+        "desarchive_par_id",
+        "commentaires",
+        "archived",
+        "est_demo",
+        "deleted_at",
+        "created_at",
+        "updated_at"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "commande_lignes": {
+      "communes": [
+        "id",
+        "commande_id",
+        "couleur_id",
+        "taille_id",
+        "quantite",
+        "taille_nom",
+        "reference_libre"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "historique_transitions": {
+      "communes": [
+        "id",
+        "commande_id",
+        "type_evenement",
+        "operateur_id",
+        "motif",
+        "survenu_le"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "bc_pf": {
+      "communes": [
+        "id",
+        "uuid",
+        "numero",
+        "commande_id",
+        "atelier_id",
+        "statut",
+        "remplace_bc_pf_id",
+        "motif_remplacement",
+        "commande_numero",
+        "article_nom",
+        "article_reference",
+        "type_production",
+        "atelier_nom",
+        "saison_nom",
+        "date_limite_production",
+        "priorite",
+        "photo_snapshot_path",
+        "entreprise_nom_commercial",
+        "entreprise_raison_sociale",
+        "entreprise_matricule_fiscal",
+        "entreprise_registre_commerce",
+        "entreprise_adresse",
+        "entreprise_telephone",
+        "entreprise_email",
+        "entreprise_banque",
+        "entreprise_agence_bancaire",
+        "entreprise_rib",
+        "entreprise_logo_snapshot_path",
+        "notes_atelier",
+        "observations_internes",
+        "commande_synced_at",
+        "created_at",
+        "updated_at",
+        "validated_at",
+        "launched_at",
+        "responsable_nom"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    },
+    "bc_pf_lignes": {
+      "communes": [
+        "id",
+        "bc_pf_id",
+        "couleur_nom",
+        "taille_nom",
+        "quantite",
+        "couleur_reference"
+      ],
+      "ignorees": [],
+      "manquantes": []
+    }
+  },
+  "typage": [],
+  "demo_detail": {
+    "articles": [],
+    "commandes": [
+      {
+        "id": 1,
+        "numero": "CMD-2026-001",
+        "statut": "en_production",
+        "quantite_totale": 480,
+        "date_lancement": "2026-07-09",
+        "deleted_at": "2026-07-22 09:27:49",
+        "reference_principale": "SS26-M-OVER-01"
+      },
+      {
+        "id": 2,
+        "numero": "CMD-2026-002",
+        "statut": "en_production",
+        "quantite_totale": 150,
+        "date_lancement": "2026-07-01",
+        "deleted_at": "2026-07-22 09:27:46",
+        "reference_principale": "FW27-M-SVT-01"
+      },
+      {
+        "id": 3,
+        "numero": "CMD-2026-003",
+        "statut": "en_production",
+        "quantite_totale": 90,
+        "date_lancement": "2026-07-16",
+        "deleted_at": "2026-07-22 09:27:50",
+        "reference_principale": null
+      },
+      {
+        "id": 4,
+        "numero": "CMD-2026-004",
+        "statut": "terminee",
+        "quantite_totale": 220,
+        "date_lancement": "2026-06-21",
+        "deleted_at": "2026-07-22 09:48:14",
+        "reference_principale": null
+      },
+      {
+        "id": 5,
+        "numero": "CMD-2026-005",
+        "statut": "validee",
+        "quantite_totale": 300,
+        "date_lancement": "2026-07-19",
+        "deleted_at": "2026-07-22 09:27:52",
+        "reference_principale": "SS26-M-OVER-02"
+      }
+    ]
+  },
+  "demo": {
+    "articles": 0,
+    "commandes": 5,
+    "residus": [
+      {
+        "type": "produit",
+        "id": 1,
+        "nom": "T-shirt Essentiel",
+        "actif": 1,
+        "usages": [
+          "3 article(s) reel(s)"
+        ]
+      },
+      {
+        "type": "produit",
+        "id": 3,
+        "nom": "Veste Denim",
+        "actif": 1,
+        "usages": [
+          "1 article(s) reel(s)"
+        ]
+      },
+      {
+        "type": "couleur",
+        "id": 7,
+        "nom": "Blanc",
+        "actif": 1,
+        "usages": [
+          "24 ligne(s) de commande"
+        ]
+      },
+      {
+        "type": "couleur",
+        "id": 8,
+        "nom": "Noir",
+        "actif": 1,
+        "usages": [
+          "76 ligne(s) de commande"
+        ]
+      },
+      {
+        "type": "couleur",
+        "id": 9,
+        "nom": "Ecru",
+        "actif": 1,
+        "usages": [
+          "17 ligne(s) de commande"
+        ]
+      },
+      {
+        "type": "couleur",
+        "id": 10,
+        "nom": "Terracotta",
+        "actif": 1,
+        "usages": [
+          "1 ligne(s) de commande"
+        ]
+      },
+      {
+        "type": "couleur",
+        "id": 11,
+        "nom": "Bleu indigo",
+        "actif": 1,
+        "usages": [
+          "21 ligne(s) de commande"
+        ]
+      },
+      {
+        "type": "couleur",
+        "id": 12,
+        "nom": "Kaki",
+        "actif": 1,
+        "usages": [
+          "11 ligne(s) de commande"
+        ]
+      },
+      {
+        "type": "responsable",
+        "id": 13,
+        "nom": "Sami",
+        "actif": 0,
+        "usages": []
+      },
+      {
+        "type": "responsable",
+        "id": 14,
+        "nom": "Nour",
+        "actif": 0,
+        "usages": []
+      },
+      {
+        "type": "responsable",
+        "id": 15,
+        "nom": "Amine",
+        "actif": 0,
+        "usages": []
+      },
+      {
+        "type": "responsable",
+        "id": 16,
+        "nom": "Hela",
+        "actif": 0,
+        "usages": []
+      },
+      {
+        "type": "responsable",
+        "id": 17,
+        "nom": "Youssef",
+        "actif": 0,
+        "usages": []
+      },
+      {
+        "type": "atelier",
+        "id": 18,
+        "nom": "Atelier interne Belvie",
+        "actif": 1,
+        "usages": []
+      }
+    ],
+    "acquittes": []
+  },
+  "operateur_actif": {
+    "id": 59,
+    "resolu": {
+      "id": 59,
+      "nom": "Tarek Bouhejba",
+      "type": "operateur",
+      "actif": 1
+    }
+  },
+  "controles": [
+    {
+      "cle": "foreign_key_check",
+      "libelle": "Integrite referentielle SQLite",
+      "critique": true,
+      "ok": true,
+      "detail": "aucune violation"
+    },
+    {
+      "cle": "integrity_check",
+      "libelle": "Integrite physique SQLite",
+      "critique": true,
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "cle": "typage",
+      "libelle": "Aucune valeur incompatible avec le type PostgreSQL",
+      "critique": true,
+      "ok": true,
+      "detail": "aucune anomalie"
+    },
+    {
+      "cle": "demo_articles",
+      "libelle": "Aucun article de demonstration",
+      "critique": true,
+      "ok": true,
+      "detail": "0 ligne(s) est_demo = 1"
+    },
+    {
+      "cle": "demo_commandes",
+      "libelle": "Aucune commande de demonstration",
+      "critique": true,
+      "ok": false,
+      "detail": "5 ligne(s) est_demo = 1"
+    },
+    {
+      "cle": "demo_listes",
+      "libelle": "Aucun residu de liste de demonstration non acquitte",
+      "critique": true,
+      "ok": false,
+      "detail": "14 entree(s) — voir note ci-dessous"
+    },
+    {
+      "cle": "operateur_actif",
+      "libelle": "Operateur actif valide",
+      "critique": true,
+      "ok": true,
+      "detail": "id 59 nom \"Tarek Bouhejba\""
+    }
+  ],
+  "migration_autorisee": false,
+  "fichiers_auxiliaires": {
+    "-wal": 0,
+    "-shm": 32768,
+    "-journal": null,
+    "donnees_en_attente": false
+  },
+  "empreinte": "31c8b3ba6bce56bbe22a4dcab5d1800caa0d7e18d0020ecca1d19853927a873d"
+}

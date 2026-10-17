@@ -1,0 +1,17 @@
+{
+  "name": "belvie-erp-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "API web de Belvie ERP — deployable separement de l'app Electron. Reutilise shared/*.js, jamais de duplication de logique metier.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.13.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "cors": "^2.8.5"
+  }
+}

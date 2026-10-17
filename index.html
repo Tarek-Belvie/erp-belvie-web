@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      CSP — source unique pour le web (Vercel) et pour Electron.
+      connect-src : XHR/fetch/WebSocket. 'self' couvre l'API interne (/api, meme
+        origine). Le domaine Supabase est indispensable depuis la migration web :
+        supabase-js appelle /auth/v1/token depuis le navigateur. Seul le projet
+        reellement utilise est autorise — jamais de joker. La reference de projet
+        n'est pas un secret (elle est deja publique dans le bundle), mais si le
+        projet Supabase change, CETTE LIGNE doit changer avec lui.
+        Ni wss: ni storage ne sont necessaires : verifie dans src/, seul
+        supabase.auth est utilise (aucun .channel(), aucun supabase.storage).
+      style-src / font-src : src/styles/global.css importe reellement Inter,
+        Space Grotesk et IBM Plex Mono depuis Google Fonts. La feuille vient de
+        fonts.googleapis.com, les fichiers de police de fonts.gstatic.com — deux
+        domaines distincts, deux directives distinctes.
+        'unsafe-inline' est conserve dans style-src : il etait deja actif via le
+        fallback default-src, et declarer style-src explicitement coupe cet
+        heritage. L'omettre casserait les styles inline de l'app.
+      img-src : belvie-media: sert les fichiers locaux sous Electron ; data: couvre
+        les apercus en base64. Depuis la migration des medias vers Supabase Storage,
+        le domaine du projet est requis en plus : mediaUrl() renvoie une URL
+        https://<ref>.supabase.co/storage/v1/object/public/... sur le web.
+        img-src N'HERITE PAS de connect-src : autoriser le domaine pour fetch/XHR
+        ne l'autorise pas pour les images. Les deux directives sont independantes.
+        Meme remarque que pour connect-src : si le projet Supabase change, CETTE
+        LIGNE doit changer avec lui.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data:; script-src 'self' 'unsafe-inline'; img-src 'self' data: belvie-media: https://ejhxupsewwwicckroxqa.supabase.co; connect-src 'self' https://ejhxupsewwwicckroxqa.supabase.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Belvie ERP</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

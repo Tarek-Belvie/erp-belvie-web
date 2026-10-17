@@ -1,0 +1,188 @@
+--- pristine/electron/db/migrate.js	2026-08-21 19:47:40.309692934 +0000
++++ belvie-erp/electron/db/migrate.js	2026-08-21 19:49:40.983908654 +0000
+@@ -360,9 +360,17 @@
+           notes_atelier: ancien.notes_atelier, observations_internes: ancien.observations_internes, commande_synced_at: null,
+           created_at: ancien.created_at, updated_at: ancien.updated_at, validated_at: null, launched_at: null,
+         });
++        // Cette migration s'exécute AVANT migrateGrillesTailles (index.js : 195 puis 215),
++        // donc taille_id désigne alors encore listes_valeurs. La résolution ci-dessous reste
++        // néanmoins valable dans les deux sens : sur une base déjà remappée, taille_nom ou la
++        // grille prennent le relais. listes_valeurs est restreint aux types taille/pointure
++        // pour qu'un identifiant de grille ne résolve jamais vers un nom de couleur.
+         const lignes = db.prepare(
+-          "SELECT co.nom AS couleur_nom, ta.nom AS taille_nom, cl.quantite FROM commande_lignes cl " +
+-          "JOIN listes_valeurs co ON co.id = cl.couleur_id LEFT JOIN listes_valeurs ta ON ta.id = cl.taille_id " +
++          "SELECT co.nom AS couleur_nom, COALESCE(cl.taille_nom, gtv.valeur, ta.nom) AS taille_nom, cl.quantite " +
++          "FROM commande_lignes cl " +
++          "JOIN listes_valeurs co ON co.id = cl.couleur_id " +
++          "LEFT JOIN grilles_tailles_valeurs gtv ON gtv.id = cl.taille_id " +
++          "LEFT JOIN listes_valeurs ta ON ta.id = cl.taille_id AND ta.type IN ('taille','pointure') " +
+           "WHERE cl.commande_id = ?"
+         ).all(ancien.commande_id);
+         for (const l of lignes) insertLigne.run(ancien.id, l.couleur_nom, l.taille_nom, l.quantite);
+@@ -1294,23 +1302,71 @@
+ // retirées d'une grille). L'ancien système (listes_valeurs) n'est ni supprimé ni modifié — la
+ // migration se contente de construire le nouveau système à côté et de faire pointer les données
+ // existantes vers lui.
++const MARQUEUR_GRILLES_CLE = "migration_grilles_tailles_version";
++const MARQUEUR_GRILLES_VALEUR = "2";
++
++// Marqueur explicite, et NON inspection des données. Deux raisons.
++//
++// 1. La garde d'origine testait la présence de la colonne taille_nom. Créée par
++//    schema.sql, celle-ci désarmait la migration avant qu'elle n'ait travaillé :
++//    les libellés n'ont jamais été figés et les taille_id jamais remappés.
++// 2. Un test du type « taille_id absent de grilles_tailles_valeurs » serait faux
++//    sur une base où un ancien id listes_valeurs collisionne numériquement avec
++//    un id de grille : la ligne paraîtrait conforme tout en désignant la mauvaise
++//    taille. Aucune inspection des données ne distingue ce cas ; seul un marqueur
++//    le peut. commande_lignes.taille_nom ne peut pas non plus servir de signal :
++//    insertLignes() ne l'écrivait pas, il est donc NULL même sur les lignes récentes.
+ function needsGrillesTaillesMigration(db) {
+   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='commande_lignes'").all();
+   if (tables.length === 0) return false; // schema.sql vient de tout créer avec la forme actuelle
+-  const cols = db.prepare("PRAGMA table_info(commande_lignes)").all().map((c) => c.name);
+-  return !cols.includes("taille_nom");
++  const params = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='parametres'").all();
++  if (params.length === 0) return true; // base très ancienne : laisser la migration s'exécuter
++  const m = db.prepare("SELECT valeur FROM parametres WHERE cle = ?").get(MARQUEUR_GRILLES_CLE);
++  return !m || m.valeur !== MARQUEUR_GRILLES_VALEUR;
+ }
+ 
+ function migrateGrillesTailles(db) {
+-  // 1) Colonne de secours d'abord, base vide.
+-  db.exec("ALTER TABLE commande_lignes ADD COLUMN taille_nom TEXT");
++  // 1) Colonne de secours, seulement si absente : la garde ne la teste plus, cette
++  // fonction peut donc s'exécuter sur une base où schema.sql l'a déjà créée.
++  const colsInit = db.prepare("PRAGMA table_info(commande_lignes)").all().map((c) => c.name);
++  if (!colsInit.includes("taille_nom")) db.exec("ALTER TABLE commande_lignes ADD COLUMN taille_nom TEXT");
++
++  // 1bis) GARDE D'AMBIGUÏTÉ, avant toute écriture. Un identifiant référencé par
++  // commande_lignes et présent des DEUX côtés est indécidable : impossible de
++  // savoir à quel référentiel il appartient. Mieux vaut échouer — runRebuildMigration
++  // restaure alors la sauvegarde — que remapper au hasard.
++  const gtvExiste = db.prepare(
++    "SELECT name FROM sqlite_master WHERE type='table' AND name='grilles_tailles_valeurs'").all();
++  if (gtvExiste.length > 0) {
++    const ambigus = db.prepare(`
++      SELECT COUNT(*) AS n FROM listes_valeurs lv
++      JOIN grilles_tailles_valeurs gtv ON gtv.id = lv.id
++      WHERE lv.type IN ('taille','pointure')
++        AND EXISTS (SELECT 1 FROM commande_lignes cl WHERE cl.taille_id = lv.id)
++    `).get().n;
++    if (ambigus > 0) {
++      throw new Error(
++        "Migration Grilles de tailles : " + ambigus + " identifiant(s) ambigu(s), présents à la fois " +
++        "dans listes_valeurs (type taille/pointure) et dans grilles_tailles_valeurs, et référencés par " +
++        "des lignes de commande. Remappage automatique impossible — arbitrage manuel requis."
++      );
++    }
++  }
+ 
+   // 2) Fige IMMÉDIATEMENT le libellé historique de chaque ligne, avant tout remappage. C'est la
+   // garantie centrale de cette migration : même si l'étape 6 échouait à mi-chemin, aucune
+   // commande n'aurait perdu son texte affiché.
++  //
++  // ORDRE DE RÉSOLUTION CRITIQUE : la grille d'abord, puis listes_valeurs RESTREINT aux types
++  // taille/pointure. Sans cette restriction, une ligne déjà conforme pointant vers la valeur de
++  // grille n° 3 résoudrait vers listes_valeurs n° 3 — qui peut être une couleur — et figerait un
++  // libellé faux, définitivement.
+   db.exec(`
+     UPDATE commande_lignes
+-    SET taille_nom = (SELECT nom FROM listes_valeurs WHERE listes_valeurs.id = commande_lignes.taille_id)
++    SET taille_nom = COALESCE(
++          (SELECT gtv.valeur FROM grilles_tailles_valeurs gtv WHERE gtv.id = commande_lignes.taille_id),
++          (SELECT lv.nom FROM listes_valeurs lv
++             WHERE lv.id = commande_lignes.taille_id AND lv.type IN ('taille','pointure')))
+     WHERE taille_id IS NOT NULL AND taille_nom IS NULL
+   `);
+ 
+@@ -1390,6 +1446,14 @@
+       db.exec("UPDATE ft_tailles SET grille_valeur_id = NULL");
+     }
+   }
++
++  // 8) Marqueur d'achèvement, en TOUT DERNIER : il n'est posé que si l'intégralité
++  // de ce qui précède a réussi. Toute exception laisse le marqueur absent, donc
++  // needsGrillesTaillesMigration() redemandera la migration au prochain démarrage.
++  // C'est ce qui rend la migration idempotente sans jamais inspecter les données.
++  db.prepare(
++    "INSERT INTO parametres (cle, valeur) VALUES (?, ?) ON CONFLICT(cle) DO UPDATE SET valeur = excluded.valeur"
++  ).run(MARQUEUR_GRILLES_CLE, MARQUEUR_GRILLES_VALEUR);
+ }
+ 
+ function needsResponsableSimplification(db) {
+--- pristine/electron/ipc/commandes.js	2026-08-21 19:47:40.312453444 +0000
++++ belvie-erp/electron/ipc/commandes.js	2026-08-21 19:48:11.383635425 +0000
+@@ -75,21 +75,30 @@
+ }
+ 
+ function insertLignes(db, commandeId, lignes) {
++  // taille_nom est figé DÈS la création : le libellé affiché ne dépend plus jamais
++  // de l'état ultérieur de la grille (valeur renommée, désactivée, retirée). Sans
++  // cela, la colonne reste NULL et le filet de sécurité historique est vide.
+   const insertLigne = db.prepare(
+-    "INSERT INTO commande_lignes (commande_id, couleur_id, reference_libre, taille_id, quantite) VALUES (?, ?, ?, ?, ?)"
++    "INSERT INTO commande_lignes (commande_id, couleur_id, reference_libre, taille_id, taille_nom, quantite) " +
++    "VALUES (?, ?, ?, ?, (SELECT valeur FROM grilles_tailles_valeurs WHERE id = ?), ?)"
+   );
+   for (const l of lignes) {
+     const ref = l.reference_libre != null ? String(l.reference_libre).trim() || null : null;
+-    insertLigne.run(commandeId, Number(l.couleur_id), ref, l.taille_id ? Number(l.taille_id) : null, Number(l.quantite));
++    const tailleId = l.taille_id ? Number(l.taille_id) : null;
++    insertLigne.run(commandeId, Number(l.couleur_id), ref, tailleId, tailleId, Number(l.quantite));
+   }
+ }
+ 
+ function fetchLignes(db, commandeId) {
++  // Taille lue depuis grilles_tailles_valeurs (référentiel unique depuis la
++  // réparation taille_id). COALESCE sur taille_nom : une valeur retirée de sa
++  // grille conserve son libellé historique à l'écran.
+   return db.prepare(
+-    "SELECT cl.id, cl.couleur_id, co.nom AS couleur, cl.reference_libre AS couleur_reference, cl.taille_id, t.nom AS taille, t.ordre AS taille_ordre, cl.quantite " +
++    "SELECT cl.id, cl.couleur_id, co.nom AS couleur, cl.reference_libre AS couleur_reference, cl.taille_id, " +
++    "COALESCE(t.valeur, cl.taille_nom) AS taille, t.ordre AS taille_ordre, cl.quantite " +
+     "FROM commande_lignes cl " +
+     "JOIN listes_valeurs co ON co.id = cl.couleur_id " +
+-    "LEFT JOIN listes_valeurs t ON t.id = cl.taille_id " +
++    "LEFT JOIN grilles_tailles_valeurs t ON t.id = cl.taille_id " +
+     "WHERE cl.commande_id = ? " +
+     "ORDER BY co.nom COLLATE NOCASE ASC, t.ordre ASC"
+   ).all(commandeId);
+--- pristine/electron/ipc/bcPf.js	2026-08-21 19:47:40.313007591 +0000
++++ belvie-erp/electron/ipc/bcPf.js	2026-08-21 19:48:19.432263943 +0000
+@@ -28,11 +28,16 @@
+ }
+ 
+ function fetchCommandeLignesNoms(db, commandeId) {
++  // Alimente le taille_nom FIGÉ des lignes de BC PF. Doit lire la grille : avec
++  // l'ancienne jointure sur listes_valeurs et des taille_id remappés, un document
++  // officiel sortirait avec une taille vide ou fausse. COALESCE sur cl.taille_nom
++  // couvre le cas d'une valeur retirée de sa grille après coup.
+   return db.prepare(
+-    "SELECT co.nom AS couleur_nom, cl.reference_libre AS couleur_reference, ta.nom AS taille_nom, cl.quantite " +
++    "SELECT co.nom AS couleur_nom, cl.reference_libre AS couleur_reference, " +
++    "COALESCE(ta.valeur, cl.taille_nom) AS taille_nom, cl.quantite " +
+     "FROM commande_lignes cl " +
+     "JOIN listes_valeurs co ON co.id = cl.couleur_id " +
+-    "LEFT JOIN listes_valeurs ta ON ta.id = cl.taille_id " +
++    "LEFT JOIN grilles_tailles_valeurs ta ON ta.id = cl.taille_id " +
+     "WHERE cl.commande_id = ?"
+   ).all(commandeId);
+ }
+--- pristine/electron/ipc/system.js	2026-08-21 19:47:40.314947934 +0000
++++ belvie-erp/electron/ipc/system.js	2026-08-21 19:48:27.007264871 +0000
+@@ -148,11 +148,11 @@
+   return db.prepare(
+     "SELECT " +
+     "COALESCE(c.numero, 'Brouillon #' || c.id) AS \"Commande\", c.reference_production AS \"Référence de production\", " +
+-    "co.nom AS \"Couleur\", cl.reference_libre AS \"Réf couleur\", COALESCE(t.nom, 'Non renseignée') AS \"Taille\", cl.quantite AS \"Quantité\" " +
++    "co.nom AS \"Couleur\", cl.reference_libre AS \"Réf couleur\", COALESCE(t.valeur, cl.taille_nom, 'Non renseignée') AS \"Taille\", cl.quantite AS \"Quantité\" " +
+     "FROM commande_lignes cl " +
+     "JOIN commandes c ON c.id = cl.commande_id " +
+     "JOIN listes_valeurs co ON co.id = cl.couleur_id " +
+-    "LEFT JOIN listes_valeurs t ON t.id = cl.taille_id " +
++    "LEFT JOIN grilles_tailles_valeurs t ON t.id = cl.taille_id " +
+     "WHERE c.deleted_at IS NULL " +
+     "ORDER BY c.created_at ASC, co.nom COLLATE NOCASE ASC, t.ordre ASC"
+   ).all();
