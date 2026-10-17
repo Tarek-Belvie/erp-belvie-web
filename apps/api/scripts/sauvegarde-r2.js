@@ -48,6 +48,20 @@ function clientR2() {
   });
 }
 
+// Configuration validée AVANT toute action : une valeur absurde ne doit jamais conduire à
+// supprimer des sauvegardes (R2_VERSIONS=0 ou « cinq » viderait le bucket).
+function nombreVersions() {
+  const v = Number(env("R2_VERSIONS", "5"));
+  if (!Number.isInteger(v) || v < 1 || v > 365) throw new Error(`R2_VERSIONS invalide (${process.env.R2_VERSIONS}) : entier de 1 à 365 attendu.`);
+  return v;
+}
+function heureSauvegarde() {
+  const h = env("HEURE_SAUVEGARDE", "00:00");
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(h)) throw new Error(`HEURE_SAUVEGARDE invalide (${h}) : format HH:MM attendu, ex. 00:00.`);
+  return h;
+}
+const echapper = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 function octets(n) {
   const u = ["o", "Ko", "Mo", "Go"]; let v = n; let i = 0;
   while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
@@ -70,7 +84,8 @@ async function sauvegarder() {
   const { PutObjectCommand, HeadObjectCommand, ListObjectsV2Command, DeleteObjectCommand } = require("@aws-sdk/client-s3");
   const bucket = env("R2_BUCKET");
   const prefixe = env("R2_PREFIXE", "base/");
-  const versions = Number(env("R2_VERSIONS", "5"));
+  const versions = nombreVersions();
+  let rotationCommencee = false;
   const debut = Date.now();
   const horo = new Date().toLocaleString("sv-SE", { timeZone: env("TZ_SAUVEGARDE", "Europe/Paris") }).replace(/[: ]/g, "-").slice(0, 16).replace(/-(\d\d)-(\d\d)$/, "-$1$2");
   const cle = `${prefixe}belvie-${horo}.dump`;
@@ -97,12 +112,20 @@ async function sauvegarder() {
     let jeton;
     do {
       const r = await s3.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefixe, ContinuationToken: jeton }));
-      for (const o of r.Contents || []) if (/belvie-.*\.dump$/.test(o.Key)) objets.push(o);
+      // Seules les sauvegardes AUTOMATIQUES (nom horodaté exact) entrent dans la rotation ; un
+      // fichier déposé à la main dans le même dossier n'est jamais compté ni supprimé.
+      const motif = new RegExp(`^${echapper(prefixe)}belvie-\\d{4}-\\d{2}-\\d{2}-\\d{4}\\.dump$`);
+      for (const o of r.Contents || []) if (motif.test(o.Key)) objets.push(o);
       jeton = r.IsTruncated ? r.NextContinuationToken : undefined;
     } while (jeton);
     objets.sort((a, b) => String(b.Key).localeCompare(String(a.Key)));
+    if (!objets.some((o) => o.Key === cle)) throw new Error(`La sauvegarde envoyée (${cle}) n'apparaît pas dans la liste R2 : rotation annulée.`);
     const supprimes = [];
-    for (const o of objets.slice(versions)) { await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: o.Key })); supprimes.push(o.Key); }
+    rotationCommencee = true;
+    for (const o of objets.slice(versions)) {
+      if (o.Key === cle) continue; // jamais la sauvegarde qui vient d'être envoyée
+      await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: o.Key })); supprimes.push(o.Key);
+    }
     const conserves = objets.slice(0, versions).map((o) => o.Key);
 
     const rapport = { ok: true, cle, taille, empreinte, duree: Math.round((Date.now() - debut) / 1000), tables, conserves, supprimes };
@@ -110,7 +133,7 @@ async function sauvegarder() {
     await notifier(rapport);
     return rapport;
   } catch (err) {
-    const rapport = { ok: false, cle, erreur: err.message, duree: Math.round((Date.now() - debut) / 1000) };
+    const rapport = { ok: false, cle, erreur: err.message, rotationCommencee, duree: Math.round((Date.now() - debut) / 1000) };
     console.error(`[sauvegarde] ÉCHEC : ${err.message}`);
     await notifier(rapport).catch((e) => console.error("[sauvegarde] e-mail d'échec impossible :", e.message));
     throw err;
@@ -143,7 +166,9 @@ async function notifier(r) {
     : [
         `La sauvegarde quotidienne de la base Belvie ERP a ÉCHOUÉ.`, "",
         `Cause : ${r.erreur}`, "",
-        `Les sauvegardes précédentes n'ont pas été touchées (aucune rotation sans nouvelle sauvegarde vérifiée).`,
+        r.rotationCommencee
+          ? `L'échec est survenu PENDANT la suppression des anciennes versions : vérifier le contenu du bucket R2.`
+          : `Les sauvegardes précédentes n'ont pas été touchées (aucune rotation sans nouvelle sauvegarde vérifiée).`,
         `À vérifier sur le serveur : docker compose logs sauvegarde`,
       ];
   await transport.sendMail({ from: env("MAIL_EXPEDITEUR", process.env.SMTP_USER || "belvie@localhost"), to: env("MAIL_DESTINATAIRE"), subject: sujet, text: lignes.join("\n") });
@@ -165,7 +190,8 @@ function prochaineEcheance(heure, fuseau) {
 }
 
 async function planifier() {
-  const heure = env("HEURE_SAUVEGARDE", "00:00"); const fuseau = env("TZ_SAUVEGARDE", "Europe/Paris");
+  const heure = heureSauvegarde(); const fuseau = env("TZ_SAUVEGARDE", "Europe/Paris");
+  nombreVersions(); // validée dès le démarrage, pas seulement à minuit
   for (;;) {
     const quand = prochaineEcheance(heure, fuseau);
     console.log(`[sauvegarde] prochaine sauvegarde : ${quand.toLocaleString("fr-FR", { timeZone: fuseau })} (${fuseau})`);

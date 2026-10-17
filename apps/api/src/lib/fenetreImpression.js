@@ -17,15 +17,20 @@ const fs = require("fs");
 const path = require("path");
 const { cheminMedia } = require("./plateforme");
 
-let navigateur = null;
+// La PROMESSE de lancement est gardée (et non le navigateur) : deux PDF demandés en même temps
+// au premier usage partagent le même Chromium au lieu d'en lancer deux.
+let lancement = null;
 async function obtenirNavigateur() {
-  if (navigateur && navigateur.isConnected()) return navigateur;
+  if (lancement) {
+    const nav = await lancement.catch(() => null);
+    if (nav && nav.isConnected()) return nav;
+  }
   const { chromium } = require("playwright-core");
-  navigateur = await chromium.launch({
+  lancement = chromium.launch({
     executablePath: process.env.CHROMIUM_PATH || undefined,
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
   });
-  return navigateur;
+  return lancement;
 }
 
 const MIME = { ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".svg": "image/svg+xml", ".gif": "image/gif" };
@@ -71,6 +76,8 @@ class FenetreImpression {
     const nav = await obtenirNavigateur();
     this._contexte = await nav.newContext({ viewport: this._taille, javaScriptEnabled: true });
     this._page = await this._contexte.newPage();
+    // Le document est autonome (médias intégrés en data:) : toute requête réseau est refusée.
+    await this._page.route("**/*", (r) => (r.request().url().startsWith("data:") ? r.continue() : r.abort()));
     const prefixe = "data:text/html;charset=utf-8,";
     if (!url.startsWith(prefixe)) throw new Error("FenetreImpression : seules les pages HTML en data: sont acceptées.");
     await this._page.setContent(integrerMedias(decodeURIComponent(url.slice(prefixe.length))), { waitUntil: "load" });
@@ -83,6 +90,11 @@ class FenetreImpression {
   }
 }
 
-async function fermerNavigateur() { if (navigateur) { await navigateur.close().catch(() => {}); navigateur = null; } }
+async function fermerNavigateur() {
+  if (!lancement) return;
+  const nav = await lancement.catch(() => null);
+  lancement = null;
+  if (nav) await nav.close().catch(() => {});
+}
 
 module.exports = { FenetreImpression, fermerNavigateur, integrerMedias };

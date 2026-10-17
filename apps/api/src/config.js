@@ -35,7 +35,8 @@ function chargerConfiguration() {
     cookieSecurise: production || process.env.COOKIE_SECURISE === "1",
     dureeSessionJours: Number(process.env.DUREE_SESSION_JOURS || 14),
     // Derrière un proxy (Caddy/Nginx, Vercel) : nécessaire pour l'IP réelle et les cookies Secure.
-    trustProxy: process.env.TRUST_PROXY || (production ? "1" : "0"),
+    // Nombre de proxys de confiance (Caddy = 1). Un NOMBRE : Express lirait une chaîne comme une IP.
+    trustProxy: Number(process.env.TRUST_PROXY || (production ? 1 : 0)),
   };
 }
 

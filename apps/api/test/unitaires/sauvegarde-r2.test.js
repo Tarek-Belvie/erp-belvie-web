@@ -54,6 +54,25 @@ test("sauvegarde : en cas d'échec, rien n'est supprimé et un e-mail d'échec p
   assert.match(mails[0].subject, /ÉCHEC/);
 });
 
+test("rotation : un fichier déposé à la main n'est ni compté ni supprimé ; R2_VERSIONS invalide refusé", async () => {
+  process.env.R2_VERSIONS = "5";
+  const manuel = "base/belvie-avant-reprise.dump";
+  const s3 = fauxS3([...anciennes, manuel]);
+  r2.deps.clientR2 = () => s3;
+  r2.deps.transportMail = { sendMail: async () => {} };
+  const r = await r2.sauvegarder();
+  assert.ok(s3.objets.has(manuel), "le fichier manuel est conservé");
+  assert.equal(r.conserves.length, 5);
+  assert.ok(!r.conserves.includes(manuel));
+  for (const v of ["0", "cinq", "-2", "1.5"]) {
+    process.env.R2_VERSIONS = v;
+    const avant = s3.objets.size;
+    await assert.rejects(r2.sauvegarder(), /R2_VERSIONS invalide/);
+    assert.equal(s3.objets.size, avant, `rien supprimé avec R2_VERSIONS=${v}`);
+  }
+  process.env.R2_VERSIONS = "5";
+});
+
 test("planification : prochaine échéance à minuit, heure de Paris", () => {
   const d = r2.prochaineEcheance("00:00", "Europe/Paris");
   assert.equal(new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }).format(d), "00:00");

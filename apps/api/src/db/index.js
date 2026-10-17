@@ -34,7 +34,17 @@ const contexteTransaction = new AsyncLocalStorage();
 // Traduction des paramètres. On ignore les « ? » / « @x » situés dans une chaîne SQL ('…'),
 // un identifiant entre guillemets ("…") ou un commentaire.
 // ------------------------------------------------------------------------------------------------
+function erreurSql(message, sql) {
+  const e = new Error(message);
+  e.code = "BELVIE_SQL"; // erreur technique : 500, détail dans le journal uniquement
+  e.sql = sql;
+  return e;
+}
+
 function traduireSql(sql, args) {
+  // Constructions que cette traduction ne sait pas traiter sans risque : on refuse plutôt que de
+  // produire un SQL silencieusement faux (chaînes E'…', dollar-quoting, opérateurs JSON ?| ?&).
+  if (/\$\$|\bE'|\?[|&]/.test(sql)) throw erreurSql("Construction SQL non prise en charge par src/db (E'…', $$…$$, ?| ou ?&).", sql);
   const nomme = args.length === 1 && args[0] !== null && typeof args[0] === "object"
     && !Array.isArray(args[0]) && !(args[0] instanceof Date) && !Buffer.isBuffer(args[0]);
   const valeurs = [];
@@ -62,7 +72,7 @@ function traduireSql(sql, args) {
       out += sql.slice(i, fin); i = fin; continue;
     }
     if (c === "?") {
-      if (nomme) throw new Error("Requête mélangeant « ? » et paramètres nommés : " + sql);
+      if (nomme) throw erreurSql("Requête mélangeant « ? » et paramètres nommés.", sql);
       valeurs.push(normaliserValeur(args[positionnel++]));
       out += "$" + valeurs.length; i++; continue;
     }
@@ -79,7 +89,7 @@ function traduireSql(sql, args) {
     out += c; i++;
   }
   if (!nomme && positionnel !== args.length) {
-    throw new Error(`Nombre de paramètres incorrect (${args.length} fournis, ${positionnel} attendus) : ${sql}`);
+    throw erreurSql(`Nombre de paramètres incorrect (${args.length} fournis, ${positionnel} attendus).`, sql);
   }
   return { texte: out, valeurs };
 }
@@ -123,6 +133,7 @@ function trierNullsCommeSqlite(sql) {
         if (profondeur === 0) {
           if (d === ",") { termes.push(terme); terme = ""; i++; continue; }
           if (d === ";") break;
+          if (d === "-" && sql[i + 1] === "-") break; // commentaire : fin de la clause
           const reste = sql.slice(i);
           if (/^\s(LIMIT|OFFSET|FETCH|FOR|UNION|EXCEPT|INTERSECT|ROWS|RANGE|GROUPS)\b/i.test(reste)) break;
         }
@@ -159,7 +170,7 @@ function ajouterReturning(texte) {
   if (!/^\s*INSERT\s/i.test(texte) || /\bRETURNING\b/i.test(texte)) return texte;
   const m = /^\s*INSERT\s+INTO\s+"?([A-Za-z0-9_]+)"?/i.exec(texte);
   if (!m || !tablesAvecId || !tablesAvecId.has(m[1].toLowerCase())) return texte;
-  return texte.replace(/;\s*$/, "") + " RETURNING id";
+  return texte.replace(/;\s*$/, "") + "\nRETURNING id";
 }
 
 async function chargerTablesAvecId(executant) {
@@ -174,6 +185,9 @@ async function chargerTablesAvecId(executant) {
 // ------------------------------------------------------------------------------------------------
 function creerBase({ connectionString, options, pool: poolExistant, journal = null } = {}) {
   const pool = poolExistant || new pg.Pool({ connectionString, options, max: Number(process.env.PG_POOL_MAX || 10) });
+  // Une connexion inactive coupée par le serveur (redémarrage, bascule Neon, réseau) émet une
+  // erreur sur le pool : sans ce gestionnaire, Node arrêterait tout le processus.
+  pool.on("error", (err) => console.error(`[${new Date().toISOString()}] Connexion PostgreSQL perdue (pool) :`, err.message));
 
   function executant() {
     const ctx = contexteTransaction.getStore();
@@ -189,7 +203,9 @@ function creerBase({ connectionString, options, pool: poolExistant, journal = nu
       if (journal) journal({ sql: finale, duree: Date.now() - debut, lignes: res.rowCount });
       return res;
     } catch (err) {
-      err.message = `${err.message}\n  SQL : ${finale}`;
+      // Le SQL reste dans le journal du serveur (err.sql), jamais dans le message renvoyé.
+      err.sql = finale;
+      if (!err.code) err.code = "BELVIE_SQL";
       throw err;
     }
   }
@@ -227,16 +243,21 @@ function creerBase({ connectionString, options, pool: poolExistant, journal = nu
         }
       }
       const client = await pool.connect();
+      const surErreur = (err) => console.error(`[${new Date().toISOString()}] Connexion PostgreSQL perdue (transaction) :`, err.message);
+      client.on("error", surErreur);
+      let connexionCassee = null;
       try {
         await client.query("BEGIN");
         const r = await contexteTransaction.run({ pool, client, profondeur: 0 }, () => fn.apply(this, args));
         await client.query("COMMIT");
         return r;
       } catch (err) {
-        try { await client.query("ROLLBACK"); } catch (_) { /* connexion déjà perdue */ }
+        try { await client.query("ROLLBACK"); } catch (e) { connexionCassee = e; }
         throw err;
       } finally {
-        client.release();
+        client.removeListener("error", surErreur);
+        // Connexion cassée : détruite au lieu d'être remise dans le pool.
+        client.release(connexionCassee || undefined);
       }
     };
   }

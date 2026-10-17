@@ -10,7 +10,7 @@ const { monterSpeciales, routeMedias } = require("./routes/speciales");
 function creerApp({ db, dbLecture, config }) {
   const app = express();
   app.disable("x-powered-by");
-  app.set("trust proxy", config.trustProxy === "0" ? false : config.trustProxy);
+  app.set("trust proxy", config.trustProxy > 0 ? config.trustProxy : false);
   app.use(express.json({ limit: "5mb" }));
   app.use(cookieParser());
 
@@ -56,9 +56,13 @@ function creerApp({ db, dbLecture, config }) {
   // l'affichait l'application Electron. Une erreur technique (PostgreSQL, fichier…) → 500, le
   // détail reste dans le journal du serveur.
   app.use((err, req, res, _next) => {
+    if (err && err.name === "MulterError") {
+      const msg = err.code === "LIMIT_FILE_SIZE" ? "Le fichier dépasse la taille maximale autorisée (10 Mo)." : "Envoi de fichier refusé.";
+      return res.status(400).json({ erreur: msg });
+    }
     const technique = !!(err && (err.code || err.severity || err instanceof TypeError || err instanceof ReferenceError));
     if (technique || !(err instanceof Error)) {
-      console.error(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} —`, err);
+      console.error(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} —`, err, err && err.sql ? `\n  SQL : ${err.sql}` : "");
       return res.status(500).json({ erreur: "Erreur technique sur le serveur. Elle a été enregistrée dans le journal." });
     }
     if (err.message && /Unexpected token|JSON/.test(err.message) && err.type === "entity.parse.failed") return res.status(400).json({ erreur: "Corps de requête invalide." });

@@ -6,6 +6,8 @@ const { creerApp } = require("./app");
 const { nettoyerTeleversements } = require("./lib/plateforme");
 const { fermerNavigateur } = require("./lib/fenetreImpression");
 
+process.on("unhandledRejection", (err) => console.error(`[${new Date().toISOString()}] Rejet non géré :`, err));
+
 async function demarrer() {
   const config = chargerConfiguration();
   if (process.env.MIGRER_AU_DEMARRAGE !== "0") await migrer({ connectionString: config.databaseUrl });
