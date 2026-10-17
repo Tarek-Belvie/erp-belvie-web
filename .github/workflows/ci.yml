@@ -1,0 +1,36 @@
+# Intégration continue : rien n'entre sur main sans passer ces contrôles.
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      CHROMIUM_PATH: /usr/bin/chromium-browser
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }   # le tag electron-1.0.1 sert de référence aux tests différentiels
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: npm ci
+      - name: Fichiers générés à jour (registre → client web, docs/api.md)
+        run: npm run generer --workspace apps/api -- --verifier
+      - name: Contrôle statique (promesses non attendues…)
+        run: npm run lint
+      - name: Migrations sur base vide
+        run: npm run db:migrer
+      - name: Tests (unitaires + non-régression ancien/nouveau)
+        run: npm test
+      - name: Construction de l'interface
+        run: npm run build:sans-typage --workspace apps/web

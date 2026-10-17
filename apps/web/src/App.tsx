@@ -9,14 +9,7 @@ import FinancePage from "./modules/finance/FinancePage";
 import SettingsPage from "./modules/settings/SettingsPage";
 import EntrepriseWizard from "./modules/entreprise/EntrepriseWizard";
 import { ListeValeur } from "./shared/types";
-import { ESTELECTRON } from "./api/platform";
-import { supabase } from "./api/supabaseClient";
-
-// Modules non encore disponibles en version web (voir shared/*.js non migré) — masqués/désactivés
-// UNIQUEMENT dans le navigateur ; la navigation Electron reste strictement inchangée.
-// L'approvisionnement lit la base par IPC (window.api.approvisionnement) : comme les fiches
-// techniques et la finance, il n'a pas d'équivalent web pour l'instant.
-const NON_DISPONIBLE_WEB: ReadonlySet<string> = new Set(["fichesTechniques", "approvisionnement", "finance", "parametres"]);
+import { auth } from "./api/client";
 
 // Chaque futur module (Stock, Qualité...) s'ajoute ici comme une simple entrée.
 const NAV_ITEMS = [
@@ -34,7 +27,7 @@ const NAV_ITEMS = [
 
 type NavKey = (typeof NAV_ITEMS)[number]["key"];
 
-export default function App() {
+export default function App({ utilisateur }: { utilisateur: { nom: string; email: string; role: string } }) {
   const [active, setActive] = useState<NavKey>("commandes");
   const [operateurActif, setOperateurActif] = useState<ListeValeur | null | undefined>(undefined);
   const [showFirstLaunchWizard, setShowFirstLaunchWizard] = useState(false);
@@ -69,28 +62,24 @@ export default function App() {
       <aside className="sidebar">
         <div className="sidebar-brand">Belvie <span>ERP</span></div>
         <nav>
-          {NAV_ITEMS.map((item) => {
-            const indisponible = !ESTELECTRON && NON_DISPONIBLE_WEB.has(item.key);
-            return (
-              <button
-                key={item.key}
-                className={`nav-item ${active === item.key ? "active" : ""}`}
-                disabled={indisponible}
-                title={indisponible ? "Disponible uniquement dans la version Electron pour le moment" : undefined}
-                onClick={() => !indisponible && setActive(item.key)}
-                style={indisponible ? { opacity: 0.4, cursor: "not-allowed" } : undefined}
-              >
-                <span className="nav-icon">{item.icon}</span>
-                {item.label}
-                {indisponible && <span style={{ fontSize: 10, marginLeft: "auto" }}>🔒</span>}
-              </button>
-            );
-          })}
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              className={`nav-item ${active === item.key ? "active" : ""}`}
+              onClick={() => setActive(item.key)}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
         </nav>
         <div className="sidebar-footer">
-          {ESTELECTRON ? "Application locale · v0.1" : (
-            <button className="btn ghost tiny" onClick={() => supabase?.auth.signOut()}>Se déconnecter</button>
-          )}
+          <div style={{ fontSize: 12, marginBottom: 6 }} title={utilisateur.email}>{utilisateur.nom}</div>
+          <button
+            className="btn ghost tiny"
+            style={{ color: "inherit", borderColor: "currentColor", background: "transparent" }}
+            onClick={async () => { await auth.deconnexion().catch(() => {}); window.location.reload(); }}
+          >Se déconnecter</button>
         </div>
       </aside>
       <main className="content">

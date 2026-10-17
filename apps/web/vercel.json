@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "cd ../.. && npm ci --workspace apps/web",
+  "buildCommand": "npm run build:sans-typage",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/api/:chemin*", "destination": "https://api.exemple.fr/api/:chemin*" },
+    { "source": "/media/:chemin*", "destination": "https://api.exemple.fr/media/:chemin*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

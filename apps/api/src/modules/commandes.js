@@ -293,9 +293,11 @@ async function create(db, payload) {
         const numero_reassort = await prochainNumeroReassort(db, article.id);
         const reference_production = article.reference_principale + "-R" + String(numero_reassort).padStart(2, "0");
         try {
-          commandeId = await insertCommandeRow(db, Object.assign({}, baseParams, {
+          // PostgreSQL : une erreur annule toute la transaction en cours. L'essai se fait donc dans
+          // un SAVEPOINT (transaction imbriquée), pour pouvoir retenter après un conflit UNIQUE.
+          commandeId = await db.transaction(() => insertCommandeRow(db, Object.assign({}, baseParams, {
             type_production: "reassort", numero_reassort: numero_reassort, reference_production: reference_production,
-          }));
+          })))();
           inseree = true;
         } catch (err) {
           derniereErreur = err;
@@ -619,7 +621,7 @@ async function besoinsMatieres(db, commandeId) {
   const quantites = await db.prepare(
     "SELECT cl.couleur_id, lv.nom AS couleur_nom, SUM(cl.quantite) AS pieces " +
     "FROM commande_lignes cl JOIN listes_valeurs lv ON lv.id = cl.couleur_id " +
-    "WHERE cl.commande_id = ? GROUP BY cl.couleur_id ORDER BY LOWER(lv.nom) COLLATE ucs_basic ASC"
+    "WHERE cl.commande_id = ? GROUP BY cl.couleur_id, lv.nom ORDER BY LOWER(lv.nom) COLLATE ucs_basic ASC"
   ).all(commandeId);
   const parCouleur = new Map(quantites.map((q) => [q.couleur_id, q]));
 

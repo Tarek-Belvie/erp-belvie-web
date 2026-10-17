@@ -78,12 +78,13 @@ async function ajouterPrixFournisseur(db, payload) {
       : payload.accessoire_catalogue_id ? "accessoire_catalogue_id" : null;
     if (cleColonne) {
       await db.prepare(
-        `UPDATE prix_fournisseurs SET date_fin_validite = date(@dateDebut, '-1 day') ` +
+        // date(x, '-1 day') de SQLite : la veille, au format AAAA-MM-JJ.
+        `UPDATE prix_fournisseurs SET date_fin_validite = to_char(CAST(@dateDebut AS date) - 1, 'YYYY-MM-DD') ` +
         `WHERE fournisseur_id = @fournisseur_id AND ${cleColonne} = @cleValeur AND date_fin_validite IS NULL`
       ).run({ dateDebut, fournisseur_id: payload.fournisseur_id, cleValeur: payload[cleColonne] });
     } else {
       await db.prepare(
-        "UPDATE prix_fournisseurs SET date_fin_validite = date(@dateDebut, '-1 day') " +
+        "UPDATE prix_fournisseurs SET date_fin_validite = to_char(CAST(@dateDebut AS date) - 1, 'YYYY-MM-DD') " +
         "WHERE fournisseur_id = @fournisseur_id AND matiere_catalogue_id IS NULL AND accessoire_catalogue_id IS NULL " +
         "AND designation = @designation AND date_fin_validite IS NULL"
       ).run({ dateDebut, fournisseur_id: payload.fournisseur_id, designation: payload.designation.trim() });
@@ -384,7 +385,9 @@ async function affecterConsommationMatiere(db, payload) {
 // prépare la future vue "Finance / Stock matières" sans construire l'écran maintenant.
 async function syntheseStockMatiere(db) {
   const combinaisons = await db.prepare(
-    "SELECT DISTINCT matiere_catalogue_id, couleur FROM achats WHERE matiere_catalogue_id IS NOT NULL"
+    // Ordre de première apparition (ce que rendait le DISTINCT de SQLite en lisant la table par id).
+    "SELECT matiere_catalogue_id, couleur FROM achats WHERE matiere_catalogue_id IS NOT NULL " +
+    "GROUP BY matiere_catalogue_id, couleur ORDER BY MIN(id)"
   ).all();
   return (await mapSeq(combinaisons, async c => {
     const matiere = await db.prepare("SELECT nom, unite_defaut FROM matieres_catalogue WHERE id = ?").get(c.matiere_catalogue_id);
@@ -412,7 +415,7 @@ async function comparaisonConsommationCommande(db, commandeId) {
     });
 
   const achatsCommande = await db.prepare(
-    "SELECT categorie, id FROM achats WHERE commande_id = ? OR id IN (SELECT achat_id FROM achats_affectations WHERE commande_id = ?)"
+    "SELECT categorie, id FROM achats WHERE commande_id = ? OR id IN (SELECT achat_id FROM achats_affectations WHERE commande_id = ?) ORDER BY id"
   ).all(commandeId, commandeId);
 
   for (const a of achatsCommande) {
@@ -999,7 +1002,7 @@ function simulationPrix(coutUnitaireHt, { coefficient, prixEnvisage }, quantiteC
 // Résumé de toutes les estimations existantes — pour la liste Coûts produits, sans appel répété
 // par article.
 async function listEstimationsResume(db) {
-  const estimations = await db.prepare("SELECT * FROM estimations").all();
+  const estimations = await db.prepare("SELECT * FROM estimations ORDER BY id").all();
   return await mapSeq(estimations, async e => {
     const s = await syntheseEstimation(db, e.id);
     return { article_id: e.article_id, estimation_id: e.id, quantite_prevue: e.quantite_prevue, nb_lignes: s.lignes.length, cout_ht_piece: s.cout_ht_piece, budget_total_ht: s.budget_total_ht };
@@ -1030,6 +1033,7 @@ async function listFacturesAvecEcheances(db, filtres) {
     JOIN achats a ON a.id = af.achat_id
     JOIN fournisseurs f ON f.id = a.fournisseur_id
     LEFT JOIN echeances ech ON ech.achat_facture_id = af.id
+    ORDER BY af.id, ech.id
   `).all();
 
   const aujourdHui = new Date().toISOString().slice(0, 10);

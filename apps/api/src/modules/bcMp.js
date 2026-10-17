@@ -119,6 +119,7 @@ async function get(db, bonId) {
       JOIN bc_mp_lignes l ON l.id = p.bc_mp_ligne_id
       LEFT JOIN commandes c ON c.id = p.commande_id
      WHERE l.bc_mp_id = ?
+     ORDER BY p.id
   `).all(bonId);
 
   let totalHt = 0;

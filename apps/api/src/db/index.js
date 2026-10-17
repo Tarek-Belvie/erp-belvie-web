@@ -71,7 +71,7 @@ function traduireSql(sql, args) {
       while (j < n && /[A-Za-z0-9_]/.test(sql[j])) j++;
       const nom = sql.slice(i + 1, j);
       if (nomme) {
-        if (!(nom in args[0])) throw new Error(`Paramètre nommé manquant : ${nom}`);
+        if (!(nom in args[0])) throw new Error(`Missing named parameter "${nom}"`); // message identique à better-sqlite3
         if (!indexParNom.has(nom)) { valeurs.push(normaliserValeur(args[0][nom])); indexParNom.set(nom, valeurs.length); }
         out += "$" + indexParNom.get(nom); i = j; continue;
       }

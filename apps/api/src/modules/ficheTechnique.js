@@ -401,7 +401,8 @@ async function addMesureLigne(db, ficheId, nom, options) {
     // La mesure enrichit le modele du TYPE de l'article, donc les prochaines fiches de ce type.
     // Decochee, elle reste strictement locale a cette fiche.
     if (opts.enrichirModele) {
-      try { await enrichirModeleDuType(db, ficheId, catalogue.nom, opts); }
+      // SAVEPOINT : un échec non bloquant ne doit pas annuler la transaction appelante (PostgreSQL).
+      try { await db.transaction(() => enrichirModeleDuType(db, ficheId, catalogue.nom, opts))(); }
       catch (err) { console.error("Enrichissement du modele impossible (non bloquant) :", err); }
     }
   }
@@ -522,7 +523,7 @@ async function addTaille(db, ficheId, nom) {
     console.error("Resolution de la grille impossible pour la taille (non bloquant) :", err);
   }
 
-  const existe = (await db.prepare("SELECT id, nom FROM ft_tailles WHERE fiche_id = ?").all(ficheId))
+  const existe = (await db.prepare("SELECT id, nom FROM ft_tailles WHERE fiche_id = ? ORDER BY id").all(ficheId))
     .some((t) => normalizeNom(t.nom) === normalizeNom(nomTrim));
   if (existe) throw new Error(`La taille « ${nomTrim} » est déjà présente sur cette fiche.`);
 
@@ -602,7 +603,7 @@ async function getGrille(db, ficheId) {
   const tailles = await db.prepare(
     "SELECT id, nom, grille_valeur_id, ordre FROM ft_tailles WHERE fiche_id = ? ORDER BY ordre"
   ).all(ficheId);
-  const valeurs = await db.prepare("SELECT mesure_catalogue_id, ft_taille_id, valeur FROM ft_mesures_valeurs WHERE fiche_id = ?").all(ficheId);
+  const valeurs = await db.prepare("SELECT mesure_catalogue_id, ft_taille_id, valeur FROM ft_mesures_valeurs WHERE fiche_id = ? ORDER BY id").all(ficheId);
   return { lignes, tailles, valeurs };
 }
 
@@ -754,7 +755,7 @@ async function getGrilleApplicable(db, ficheId) {
     const utilisees = await db.prepare(
       "SELECT DISTINCT g.id, g.nom, g.actif FROM fiches_techniques f " +
       "JOIN articles a ON a.id = f.article_id JOIN grilles_tailles g ON g.id = f.grille_id " +
-      "WHERE a.produit_id = ? AND f.id != ? AND f.grille_id IS NOT NULL"
+      "WHERE a.produit_id = ? AND f.id != ? AND f.grille_id IS NOT NULL ORDER BY g.id"
     ).all(article.produit_id, ficheId);
     if (utilisees.length === 1) return { grille: utilisees[0], origine: "suggestion", suggestions: utilisees };
     if (utilisees.length > 1) return { grille: null, origine: "ambigu", suggestions: utilisees };
@@ -838,7 +839,7 @@ async function selectionnerTaille(db, ficheId, grilleValeurId) {
   // historiques creees avant la correction de addTaille(), dont le grille_valeur_id peut differer
   // alors qu'il s'agit bien de la meme taille — sans ce controle, un doublon « 3XL » apparaissait.
   const existe = (await db.prepare(
-    "SELECT id, nom, grille_valeur_id FROM ft_tailles WHERE fiche_id = ?"
+    "SELECT id, nom, grille_valeur_id FROM ft_tailles WHERE fiche_id = ? ORDER BY id"
   ).all(ficheId)).find((t) => t.grille_valeur_id === grilleValeurId || normalizeNom(t.nom) === normalizeNom(v.valeur));
   if (existe) {
     // Realigne le pointeur si la ligne existait sous un identifiant historique errone.
@@ -872,7 +873,7 @@ async function ajouterTailleExceptionnelle(db, ficheId, nom) {
   const nomTrim = String(nom || "").trim();
   if (!nomTrim) throw new Error("Le nom de la taille est obligatoire.");
   const doublon = await findSeq(
-    await db.prepare("SELECT id FROM ft_tailles WHERE fiche_id = ?").all(ficheId),
+    await db.prepare("SELECT id FROM ft_tailles WHERE fiche_id = ? ORDER BY id").all(ficheId),
     async t => normalizeNom((await db.prepare("SELECT nom FROM ft_tailles WHERE id = ?").get(t.id)).nom) === normalizeNom(nomTrim)
   );
   if (doublon) throw new Error(`La taille « ${nomTrim} » est déjà présente sur cette fiche.`);
@@ -888,7 +889,7 @@ async function ajouterTailleExceptionnelle(db, ficheId, nom) {
 async function analyserChangementGrille(db, ficheId, nouvelleGrilleId) {
   const tailles = await db.prepare("SELECT id, nom FROM ft_tailles WHERE fiche_id = ? ORDER BY ordre, id").all(ficheId);
   const valeurs = nouvelleGrilleId
-    ? await db.prepare("SELECT id, valeur, valeur_normalisee FROM grilles_tailles_valeurs WHERE grille_id = ? AND actif = 1").all(nouvelleGrilleId)
+    ? await db.prepare("SELECT id, valeur, valeur_normalisee FROM grilles_tailles_valeurs WHERE grille_id = ? AND actif = 1 ORDER BY valeur_normalisee").all(nouvelleGrilleId)
     : [];
   const parNorm = new Map(valeurs.map((v) => [v.valeur_normalisee, v]));
   const conservees = [];
@@ -1024,7 +1025,7 @@ async function setGradation(db, ficheId, mesureCatalogueId, tailleDepartId, tail
 async function simulerGradation(db, ficheId, mesureCatalogueId, tailleReferenceId) {
   const tailles = await db.prepare("SELECT id, nom, ordre FROM ft_tailles WHERE fiche_id = ? ORDER BY ordre, id").all(ficheId);
   const valeurs = await db.prepare(
-    "SELECT ft_taille_id, valeur FROM ft_mesures_valeurs WHERE fiche_id = ? AND mesure_catalogue_id = ?"
+    "SELECT ft_taille_id, valeur FROM ft_mesures_valeurs WHERE fiche_id = ? AND mesure_catalogue_id = ? ORDER BY id"
   ).all(ficheId, mesureCatalogueId);
   const parTaille = new Map(valeurs.map((v) => [v.ft_taille_id, v.valeur]));
 
@@ -1119,7 +1120,7 @@ async function mesuresManquantes(db, ficheId) {
   if (!article || !article.produit_id) return { type_produit: null, mesures: [] };
 
   const presentes = new Set(
-    (await db.prepare("SELECT mesure_catalogue_id FROM ft_mesures_lignes WHERE fiche_id = ?").all(ficheId))
+    (await db.prepare("SELECT mesure_catalogue_id FROM ft_mesures_lignes WHERE fiche_id = ? ORDER BY mesure_catalogue_id").all(ficheId))
       .map((r) => r.mesure_catalogue_id)
   );
   const vues = new Set();

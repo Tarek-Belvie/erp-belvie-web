@@ -164,7 +164,7 @@ async function getArticleDeclinaisonValeurs(db, articleId) {
     "SELECT adv.declinaison_type_id, adv.declinaison_valeur_id, dv.valeur, dv.couleur_hex, dv.ordre " +
     "FROM article_declinaison_valeurs adv " +
     "JOIN declinaison_valeurs dv ON dv.id = adv.declinaison_valeur_id " +
-    "WHERE adv.article_id = ? ORDER BY dv.ordre"
+    "WHERE adv.article_id = ? ORDER BY dv.ordre, adv.declinaison_type_id, adv.declinaison_valeur_id"
   ).all(articleId);
 }
 
@@ -307,7 +307,7 @@ async function genererVariantes(db, articleId, selections) {
   if (combinaisons.length === 0) throw new Error("Sélectionnez au moins une valeur pour générer des déclinaisons.");
 
   const existantes = await db.prepare(
-    "SELECT av.id, GROUP_CONCAT(avv.declinaison_type_id || ':' || avv.declinaison_valeur_id) AS cle " +
+    "SELECT av.id, string_agg(avv.declinaison_type_id || ':' || avv.declinaison_valeur_id, ',') AS cle " +
     "FROM article_variantes av " +
     "JOIN article_variante_valeurs avv ON avv.article_variante_id = av.id " +
     "WHERE av.article_id = ? GROUP BY av.id"

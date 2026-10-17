@@ -135,6 +135,7 @@ async function lireMatieres(db, ficheId) {
       FROM ft_matiere_consommations_taille c
       JOIN ft_tailles t ON t.id = c.ft_taille_id
      WHERE t.fiche_id = ?
+     ORDER BY c.id
   `).all(ficheId);
 
   // consommation_technique sur ft_matiere_couleurs est la colonne ajoutée à l'étape 1 : elle
@@ -148,6 +149,7 @@ async function lireMatieres(db, ficheId) {
       JOIN ft_matieres m ON m.id = mc.ft_matiere_id
       LEFT JOIN matiere_couleurs cat ON cat.id = mc.matiere_couleur_id
      WHERE m.fiche_id = ?
+     ORDER BY mc.id
   `).all(ficheId);
 
   return matieres.map((m) => {
@@ -205,6 +207,7 @@ async function lireFournitures(db, ficheId) {
       FROM ft_fourniture_tailles ft
       JOIN ft_tailles t ON t.id = ft.ft_taille_id
      WHERE t.fiche_id = ?
+     ORDER BY ft.id
   `).all(ficheId);
 
   const couleurs = await db.prepare(`
@@ -213,6 +216,7 @@ async function lireFournitures(db, ficheId) {
       FROM ft_fourniture_couleurs fc
       JOIN ft_accessoires a ON a.id = fc.ft_accessoire_id
      WHERE a.fiche_id = ?
+     ORDER BY fc.id
   `).all(ficheId);
 
   return fournitures.map((f) => {
@@ -391,6 +395,7 @@ async function lireEnPreparation(db, commandeId, lignesBesoin) {
       JOIN bc_mp_lignes l ON l.id = p.bc_mp_ligne_id
       JOIN bc_mp b ON b.id = l.bc_mp_id
      WHERE p.commande_id = ? AND b.statut = 'brouillon'
+     ORDER BY p.id
   `).all(commandeId);
 
   const resultat = [];

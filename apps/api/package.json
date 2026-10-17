@@ -8,25 +8,29 @@
     "dev": "node --watch src/server.js",
     "db:migrer": "node src/db/migrer.js",
     "lint": "eslint src",
-    "test": "node --test --test-concurrency=1 test/",
-    "utilisateur": "node scripts/utilisateur.js"
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
+    "utilisateur": "node scripts/utilisateur.js",
+    "generer": "node scripts/generer.js",
+    "sauvegarde:r2": "node scripts/sauvegarde-r2.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1152.0",
     "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.3.0",
     "cookie-parser": "^1.4.7",
     "express": "^4.21.2",
     "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.10.1",
     "pg": "^8.13.1",
     "playwright-core": "^1.48.2",
     "sharp": "^0.33.5",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "better-sqlite3": "^11.3.0",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.9.0",
     "eslint": "^9.14.0",
     "typescript": "^5.6.3",
-    "typescript-eslint": "^8.13.0",
-    "@types/node": "^22.9.0",
-    "@types/express": "^4.17.21"
+    "typescript-eslint": "^8.13.0"
   }
 }

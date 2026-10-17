@@ -1,0 +1,62 @@
+# ================================================================================================
+# Belvie ERP — serveur (API + sauvegardes + HTTPS), et en option la base PostgreSQL.
+#
+#   Base hébergée (Neon…)  : docker compose up -d --build
+#   Base sur le serveur    : docker compose --profile base-locale up -d --build
+#
+# Configuration : fichier .env à côté de ce fichier (modèle : .env.example). Voir docs/deploiement.md.
+# ================================================================================================
+services:
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    volumes:
+      - donnees:/donnees
+    expose: ["3001"]
+
+  # Sauvegarde quotidienne de la base vers Cloudflare R2 (00:00, Europe/Paris, 5 versions, e-mail).
+  sauvegarde:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    restart: unless-stopped
+    env_file: .env
+    command: ["node", "scripts/sauvegarde-r2.js", "--planifier"]
+    volumes:
+      - donnees:/donnees
+    depends_on: [api]
+
+  # HTTPS automatique (Let's Encrypt) devant l'API. Le domaine vient de DOMAINE_API dans .env.
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    env_file: .env
+    volumes:
+      - ./deploiement/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_donnees:/data
+      - caddy_config:/config
+    depends_on: [api]
+
+  # Optionnel : PostgreSQL sur le serveur (si l'on n'utilise pas une base hébergée).
+  postgres:
+    image: postgres:17
+    profiles: ["base-locale"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: belvie
+      POSTGRES_USER: belvie
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant dans .env}
+    volumes:
+      - postgres_donnees:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U belvie -d belvie"]
+      interval: 10s
+      retries: 5
+
+volumes:
+  donnees:
+  postgres_donnees:
+  caddy_donnees:
+  caddy_config:

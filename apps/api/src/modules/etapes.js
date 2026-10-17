@@ -1,6 +1,6 @@
 async function list(db, { includeInactive = false } = {}) {
   const where = includeInactive ? "" : "WHERE actif = 1";
-  return await db.prepare(`SELECT * FROM etapes ${where} ORDER BY ordre ASC`).all();
+  return await db.prepare(`SELECT * FROM etapes ${where} ORDER BY ordre ASC, id ASC`).all();
 }
 
 function slugify(text) {

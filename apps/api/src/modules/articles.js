@@ -38,7 +38,9 @@ async function genererReferenceAvecRetry(db, params, appliquer) {
       saisonCode: saison.code, annee, rayonCode: rayon.code, abreviation, sequentiel,
     });
     try {
-      appliquer(reference, sequentiel);
+      // PostgreSQL : une erreur dans une transaction l'annule entièrement. L'essai se fait donc
+      // dans un SAVEPOINT (transaction imbriquée), pour pouvoir retenter après un conflit UNIQUE.
+      await db.transaction(appliquer)(reference, sequentiel);
       return reference;
     } catch (err) {
       derniereErreur = err;

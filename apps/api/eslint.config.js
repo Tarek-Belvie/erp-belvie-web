@@ -14,5 +14,16 @@ module.exports = tseslint.config(
       "@typescript-eslint/await-thenable": "error",
       "@typescript-eslint/require-await": "off",
     },
+  },
+  {
+    // Assemblage Express : les gestionnaires asynchrones attrapent leurs erreurs (try/catch → next),
+    // Express peut donc les recevoir comme callbacks. La règle reste stricte partout ailleurs —
+    // notamment pour arr.forEach(async …), le piège principal du passage à l'asynchrone.
+    files: ["src/app.js", "src/server.js", "src/routes/**/*.js", "src/auth.js"],
+    rules: { "@typescript-eslint/no-misused-promises": ["error", { checksVoidReturn: { arguments: false } }] },
+  },
+  {
+    files: ["test/**/*.js"],
+    rules: { "@typescript-eslint/no-floating-promises": "off" },
   }
 );

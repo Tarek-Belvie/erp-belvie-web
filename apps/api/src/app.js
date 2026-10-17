@@ -55,7 +55,6 @@ function creerApp({ db, dbLecture, config }) {
   // Erreurs : une règle métier (Error levée par un module) → 400 avec son message, tel que
   // l'affichait l'application Electron. Une erreur technique (PostgreSQL, fichier…) → 500, le
   // détail reste dans le journal du serveur.
-  // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, _next) => {
     const technique = !!(err && (err.code || err.severity || err instanceof TypeError || err instanceof ReferenceError));
     if (technique || !(err instanceof Error)) {

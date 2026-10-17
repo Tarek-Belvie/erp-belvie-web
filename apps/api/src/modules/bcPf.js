@@ -38,7 +38,8 @@ async function fetchCommandeLignesNoms(db, commandeId) {
     "FROM commande_lignes cl " +
     "JOIN listes_valeurs co ON co.id = cl.couleur_id " +
     "LEFT JOIN grilles_tailles_valeurs ta ON ta.id = cl.taille_id " +
-    "WHERE cl.commande_id = ?"
+    // Ordre explicite = celui que SQLite donnait (lecture par l'index commande_id, donc par id).
+    "WHERE cl.commande_id = ? ORDER BY cl.id"
   ).all(commandeId);
 }
 
@@ -191,7 +192,7 @@ async function listForCommande(db, commandeId) {
 
 async function attachLignes(db, bc) {
   if (!bc) return null;
-  const lignes = await db.prepare("SELECT * FROM bc_pf_lignes WHERE bc_pf_id = ?").all(bc.id);
+  const lignes = await db.prepare("SELECT * FROM bc_pf_lignes WHERE bc_pf_id = ? ORDER BY id").all(bc.id);
   return Object.assign({}, bc, { lignes: lignes });
 }
 

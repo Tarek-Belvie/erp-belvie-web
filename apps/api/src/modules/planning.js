@@ -330,10 +330,11 @@ async function convertirEnProduit(db, id, payloadArticle) {
         const sequentiel = await prochainSequentiel(db, { saisonId, annee, rayonId, abreviation });
         const reference = genererReferencePrincipale({ saisonCode: saison.code, annee, rayonCode: rayon.code, abreviation, sequentiel });
         try {
-          const info = await db.prepare(
+          // SAVEPOINT : en PostgreSQL, un conflit UNIQUE annulerait sinon toute la transaction.
+          const info = await db.transaction(async () => await db.prepare(
             "INSERT INTO articles (uuid, produit_id, saison_id, annee_collection, rayon_id, categorie_id, abreviation, numero_sequentiel, reference_principale, est_demo) " +
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)"
-          ).run(uuid, produitId, saisonId, annee, rayonId, current.categorie_id, abreviation, sequentiel, reference);
+          ).run(uuid, produitId, saisonId, annee, rayonId, current.categorie_id, abreviation, sequentiel, reference))();
           articleId = info.lastInsertRowid;
           break;
         } catch (err) {

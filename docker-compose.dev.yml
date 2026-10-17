@@ -1,0 +1,10 @@
+# Développement local : uniquement PostgreSQL (l'API et l'interface tournent avec npm run dev).
+#   docker compose -f docker-compose.dev.yml up -d
+services:
+  postgres:
+    image: postgres:17
+    environment: { POSTGRES_DB: belvie, POSTGRES_USER: belvie, POSTGRES_PASSWORD: belvie }
+    ports: ["5432:5432"]
+    volumes: [postgres_dev:/var/lib/postgresql/data]
+volumes:
+  postgres_dev:

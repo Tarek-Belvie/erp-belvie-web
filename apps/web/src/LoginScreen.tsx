@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { supabase } from "./api/supabaseClient";
+import { auth } from "./api/client";
 
-export default function LoginScreen({ onConnecte }: { onConnecte: () => void }) {
+export default function LoginScreen({ onConnecte }: { onConnecte: (u: any) => void }) {
   const [email, setEmail] = useState("");
   const [motDePasse, setMotDePasse] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
@@ -9,13 +9,16 @@ export default function LoginScreen({ onConnecte }: { onConnecte: () => void }) 
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!supabase) { setErreur("Configuration Supabase manquante."); return; }
     setBusy(true);
     setErreur(null);
-    const { error } = await supabase.auth.signInWithPassword({ email, password: motDePasse });
-    setBusy(false);
-    if (error) { setErreur("Email ou mot de passe incorrect."); return; }
-    onConnecte();
+    try {
+      const u = await auth.connexion(email, motDePasse);
+      onConnecte(u);
+    } catch (err: any) {
+      setErreur(err?.message || "Connexion impossible.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
