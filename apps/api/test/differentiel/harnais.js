@@ -153,6 +153,10 @@ async function creerMondes({ nom = "diff", sqliteSource = null, ignorerTables = 
   const ancienModules = {};
   const chargerAncien = (m) => (ancienModules[m] = ancienModules[m] || require(path.join(dossier, "electron/ipc", m)));
   const parCanal = new Map(registre.map((r) => [`${r.espace}:${r.methode}`, r]));
+  // Routes spéciales (protégées admin, hors registre) appelées directement sur le module.
+  const system = require("../../src/modules/system");
+  parCanal.set("system:loadDemoData", { appel: (db) => system.loadDemoData(db) });
+  parCanal.set("system:clearDemoData", { appel: (db) => system.clearDemoData(db) });
 
   const journal = [];
   // Exécute le canal sur les deux mondes et note tout écart dans le journal.

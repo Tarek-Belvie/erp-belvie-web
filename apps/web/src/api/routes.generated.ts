@@ -262,7 +262,4 @@ export const ROUTES: RouteApi[] = [
   { espace: "finance", methode: "creerPosteCout", lecture: false, params: ["payload"] },
   { espace: "finance", methode: "mettreAJourPosteCout", lecture: false, params: ["id","patch"] },
   { espace: "finance", methode: "supprimerPosteCout", lecture: false, params: ["id"] },
-  { espace: "system", methode: "backupAvantOperation", lecture: false, params: ["motif"] },
-  { espace: "system", methode: "loadDemoData", lecture: false, params: [] },
-  { espace: "system", methode: "clearDemoData", lecture: false, params: [] },
 ];

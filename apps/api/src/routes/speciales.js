@@ -143,4 +143,13 @@ function routeMedias() {
   };
 }
 
-module.exports = { monterSpeciales, routeMedias };
+// Chemins traités ici : ils ne doivent JAMAIS exister aussi dans le registre (voir monterRegistre),
+// sinon une version sans contrôle (admin, fichier…) pourrait être servie selon l'ordre de montage.
+const CHEMINS_SPECIAUX = new Set([
+  "/fichiers", "/bcPf/telechargerPdf", "/ficheTechnique/telechargerPdf", "/bcPf/lancer", "/system/exportFile",
+  "/system/backup", "/system/backupAvantOperation", "/system/listerSauvegardes", "/system/verifierSauvegarde",
+  "/system/telechargerSauvegarde", "/system/dossierExterne", "/system/restore", "/system/essaiRestauration",
+  "/system/choisirDossierExterne", "/system/oublierDossierExterne", "/system/loadDemoData", "/system/clearDemoData", "/system/version",
+]);
+
+module.exports = { monterSpeciales, routeMedias, CHEMINS_SPECIAUX };

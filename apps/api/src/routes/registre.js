@@ -321,7 +321,6 @@ const routes = [
   { espace: "finance", methode: "supprimerPosteCout", lecture: false, params: ["id"], appel: (db, id) => finance.supprimerPosteCout(db, id) },
   // ---------------------------------------------------------------- system
   // SPÉCIAL : system:backup → voir routes/speciales.js
-  { espace: "system", methode: "backupAvantOperation", lecture: false, params: ["motif"], appel: (db, motif) => system.backupAvantOperation(db, motif) },
   // SPÉCIAL : system:verifierSauvegarde → voir routes/speciales.js
   // SPÉCIAL : system:essaiRestauration → voir routes/speciales.js
   // SPÉCIAL : system:listerSauvegardes → voir routes/speciales.js
@@ -330,7 +329,5 @@ const routes = [
   // SPÉCIAL : system:oublierDossierExterne → voir routes/speciales.js
   // SPÉCIAL : system:restore → voir routes/speciales.js
   // SPÉCIAL : system:exportFile → voir routes/speciales.js
-  { espace: "system", methode: "loadDemoData", lecture: false, params: [], appel: (db) => system.loadDemoData(db) },
-  { espace: "system", methode: "clearDemoData", lecture: false, params: [], appel: (db) => system.clearDemoData(db) },
 ];
 module.exports = routes;

@@ -40,7 +40,7 @@ sequenceDiagram
 
 ## Le registre des routes : source unique
 
-`apps/api/src/routes/registre.js` contient une ligne par fonction exposée (261 aujourd'hui) :
+`apps/api/src/routes/registre.js` contient une ligne par fonction exposée (258 aujourd'hui, plus une vingtaine de routes spéciales dans speciales.js) :
 
 ```js
 { espace: "commandes", methode: "valider", lecture: false, params: ["id"], appel: (db, id) => commandes.validerCommande(db, id) },

@@ -18,8 +18,13 @@ class ErreurRequete extends Error {}
 
 function monterRegistre({ db, dbLecture }) {
   const router = express.Router();
+  const { CHEMINS_SPECIAUX } = require("./speciales");
+  const vus = new Set();
   for (const r of registre) {
     const chemin = `/${r.espace}/${r.methode}`;
+    // Garde-fou : une route en double (ou qui masquerait une route spéciale protégée) arrête le démarrage.
+    if (vus.has(chemin) || CHEMINS_SPECIAUX.has(chemin)) throw new Error(`Route déclarée deux fois : ${chemin} (registre.js / speciales.js)`);
+    vus.add(chemin);
     const gestionnaire = async (req, res, next) => {
       try {
         const source = r.lecture ? req.query : (req.body || {});

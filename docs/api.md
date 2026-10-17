@@ -43,7 +43,7 @@
 | GET | `/api/system/version` | — | Version de l'API. |
 | GET | `/media/<chemin>` | — | Fichier image enregistré (photos, logo, croquis). |
 
-## Routes métier (261)
+## Routes métier (258)
 
 ### commandes
 
@@ -382,11 +382,3 @@
 | POST | `/api/finance/creerPosteCout` | `payload` | `modules/finance.creerPosteCout` |
 | POST | `/api/finance/mettreAJourPosteCout` | `id`, `patch` | `modules/finance.mettreAJourPosteCout` |
 | POST | `/api/finance/supprimerPosteCout` | `id` | `modules/finance.supprimerPosteCout` |
-
-### system
-
-| Verbe | Chemin | Paramètres | Fonction appelée |
-|---|---|---|---|
-| POST | `/api/system/backupAvantOperation` | `motif` | `modules/system.backupAvantOperation` |
-| POST | `/api/system/loadDemoData` | — | `modules/system.loadDemoData` |
-| POST | `/api/system/clearDemoData` | — | `modules/system.clearDemoData` |
