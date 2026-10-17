@@ -2,7 +2,7 @@
 // HARNAIS DE NON-RÉGRESSION « ANCIEN / NOUVEAU ».
 //
 // Chaque appel est exécuté deux fois, avec les mêmes arguments :
-//   * ANCIEN  : le code Electron 1.0.1 d'origine (tag git electron-1.0.1), sur SQLite ;
+//   * ANCIEN  : le code Electron 1.0.1 d'origine (tag git electron-1.0.1, ou à défaut le commit d'import), sur SQLite ;
 //   * NOUVEAU : le code de apps/api, sur PostgreSQL, via le registre des routes.
 // Les deux bases partent du même état (installation neuve). Les résultats (ou les messages
 // d'erreur) doivent être identiques, aux horodatages près.
@@ -24,11 +24,22 @@ const RACINE = path.resolve(__dirname, "../../../..");
 const URL_ADMIN = process.env.DATABASE_URL_TEST_ADMIN || process.env.DATABASE_URL;
 
 // ---------------------------------------------------------------- Code d'origine
+// Référence du code Electron 1.0.1 : le tag s'il est présent, sinon le commit d'import (premier
+// commit du dépôt, « Import de la version Electron 1.0.1 »). Ainsi les tests ne dépendent pas de
+// la présence du tag sur le dépôt distant.
+function referenceElectron() {
+  try { return execSync(`git -C "${RACINE}" rev-parse --verify --quiet electron-1.0.1^{commit}`).toString().trim(); }
+  catch (_) { /* pas de tag : on cherche le commit d'import */ }
+  const sha = execSync(`git -C "${RACINE}" log --format=%H --grep="^Import de la version Electron 1.0.1" --reverse`).toString().trim().split("\n")[0];
+  if (!sha) throw new Error("Commit de référence Electron 1.0.1 introuvable (historique Git incomplet ? cloner avec fetch-depth: 0).");
+  return sha;
+}
+
 function extraireAncienCode() {
   const dossier = path.join(os.tmpdir(), "belvie-electron-1.0.1");
   if (!fs.existsSync(path.join(dossier, "electron/main.js"))) {
     fs.mkdirSync(dossier, { recursive: true });
-    execSync(`git -C "${RACINE}" archive electron-1.0.1 electron package.json | tar -x -C "${dossier}"`);
+    execSync(`git -C "${RACINE}" archive ${referenceElectron()} electron package.json | tar -x -C "${dossier}"`);
   }
   return dossier;
 }
