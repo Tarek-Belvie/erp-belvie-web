@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
 const { dossierDonnees } = require("../lib/plateforme");
+const stockage = require("../lib/stockage");
 const sharp = require("sharp");
 const { normalizeNom, stripAccents } = require("../lib/normalize");
 const modelesMesuresApi = require("./modelesMesures");
@@ -12,10 +13,9 @@ const ALLOWED_EXT = [".jpg", ".jpeg", ".png", ".webp"];
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 
 function getUserDataDir() { return dossierDonnees(); }
-function getCroquisDir() { return path.join(getUserDataDir(), "images", "fiches-techniques"); }
-function getAccessoiresDir() { return path.join(getUserDataDir(), "images", "fiches-techniques-accessoires"); }
-function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
-function toRelative(absPath) { return path.relative(getUserDataDir(), absPath).split(path.sep).join("/"); }
+// Dossiers RELATIFS dans le stockage (disque ou Cloudflare R2, voir lib/stockage.js).
+function getCroquisDir() { return "images/fiches-techniques"; }
+function getAccessoiresDir() { return "images/fiches-techniques-accessoires"; }
 
 function validateFile(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -29,22 +29,16 @@ function validateFile(filePath) {
 // recompresser agressivement : un croquis technique doit rester net à l'impression, contrairement
 // à une simple miniature d'aperçu.
 async function copyIntoStore(sourcePath, dir) {
-  ensureDir(dir);
   const { ext } = validateFile(sourcePath);
-  const uniqueName = `${crypto.randomUUID()}${ext}`;
-  const destAbs = path.join(dir, uniqueName);
-  await sharp(sourcePath).rotate().toFile(destAbs);
-  return toRelative(destAbs);
+  const rel = `${dir}/${crypto.randomUUID()}${ext}`;
+  // Même format de sortie que sharp(...).toFile(nom.ext) : déduit de l'extension.
+  const format = { ".jpg": "jpeg", ".jpeg": "jpeg", ".png": "png", ".webp": "webp" }[ext];
+  await stockage.ecrire(rel, await sharp(sourcePath).rotate().toFormat(format).toBuffer());
+  return rel;
 }
 
-function removeFile(relPath) {
-  if (!relPath) return;
-  try {
-    const abs = path.join(getUserDataDir(), relPath);
-    if (fs.existsSync(abs)) fs.unlinkSync(abs);
-  } catch (err) {
-    console.error("Suppression du fichier impossible (non bloquant) :", err);
-  }
+async function removeFile(relPath) {
+  await stockage.supprimerSansErreur(relPath, "Suppression du fichier");
 }
 
 // --- Fiche technique ---
@@ -263,7 +257,7 @@ async function deleteCroquis(db, croquisId) {
   if (!c) return { deleted: false };
   await assertModifiable(db, c.fiche_id);
   await db.prepare("DELETE FROM ft_croquis WHERE id = ?").run(croquisId); // ON DELETE CASCADE supprime les annotations liées
-  removeFile(c.image_path);
+  await removeFile(c.image_path);
   return { deleted: true };
 }
 
@@ -1312,7 +1306,7 @@ async function setAccessoirePhoto(db, accessoireId, sourcePath) {
   await assertModifiable(db, current.fiche_id);
   const photoPath = await copyIntoStore(sourcePath, getAccessoiresDir());
   await db.prepare("UPDATE ft_accessoires SET photo_path = ? WHERE id = ?").run(photoPath, accessoireId);
-  if (current.photo_path) removeFile(current.photo_path);
+  if (current.photo_path) await removeFile(current.photo_path);
   return await db.prepare("SELECT * FROM ft_accessoires WHERE id = ?").get(accessoireId);
 }
 
@@ -1320,7 +1314,7 @@ async function deleteAccessoire(db, accessoireId) {
   const current = await db.prepare("SELECT * FROM ft_accessoires WHERE id = ?").get(accessoireId);
   if (current) await assertModifiable(db, current.fiche_id);
   await db.prepare("DELETE FROM ft_accessoires WHERE id = ?").run(accessoireId);
-  if (current && current.photo_path) removeFile(current.photo_path);
+  if (current && current.photo_path) await removeFile(current.photo_path);
   return { deleted: true };
 }
 

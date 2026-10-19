@@ -3,13 +3,19 @@
   "version": "2.0.0-dev",
   "private": true,
   "description": "Belvie ERP — application web (API Node/Express + PostgreSQL, interface React)",
-  "workspaces": ["apps/api", "apps/web"],
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
   "scripts": {
     "dev": "npm run dev --workspace apps/api & npm run dev --workspace apps/web",
     "build": "npm run build --workspace apps/web",
     "lint": "npm run lint --workspace apps/api",
     "test": "npm test --workspace apps/api",
-    "db:migrer": "npm run db:migrer --workspace apps/api"
+    "db:migrer": "npm run db:migrer --workspace apps/api",
+    "vercel-build": "node tools/vercel/build.js"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22"
+  }
 }

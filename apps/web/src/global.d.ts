@@ -373,6 +373,11 @@ export interface BelvieApi {
       elements_deplaces?: string[]; fichiers_restaures?: number; verification?: RapportSauvegarde;
     }>;
     exportFile: (format: "csv" | "xlsx") => Promise<{ canceled: boolean; filePath?: string }>;
+    /** « serveur » : sauvegardes complètes faites sur le serveur ; « r2 » : version en ligne,
+     *  sauvegardes automatiques de la nuit dans Cloudflare R2. */
+    modeSauvegardes: () => Promise<{ mode: "serveur" | "r2" }>;
+    /** Version en ligne : lien signé (5 min) pour télécharger une sauvegarde de la nuit. */
+    lienSauvegarde: (nom: string) => Promise<{ url: string; nom: string }>;
     loadDemoData: () => Promise<{ commandes: number; articles: number }>;
     clearDemoData: () => Promise<{ removed: number; articlesRemoved: number }>;
   };

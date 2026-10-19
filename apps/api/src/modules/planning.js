@@ -40,12 +40,7 @@ async function nettoyerAncienneImage(db, oldPhotoPath, oldThumbPath, excludePlan
       continue;
     if (await planningPhotoEstReferencee(db, relPath, excludePlanningId))
       continue;
-    const abs = path.join(getUserDataDir(), relPath);
-    try {
-      if (abs && fs.existsSync(abs)) fs.unlinkSync(abs);
-    } catch (err) {
-      console.error("Impossible de supprimer l'image de planification devenue orpheline :", err);
-    }
+    await require("../lib/stockage").supprimerSansErreur(relPath, "Suppression de l'image de planification devenue orpheline");
   }
 }
 

@@ -16,3 +16,6 @@ sauvegardes/
 *.db-wal
 *.db-shm
 reprise-archives/
+
+# Démarrage local (base PostgreSQL embarquée, copie des données, fichiers)
+.local/

@@ -13,13 +13,9 @@ async function demarrer() {
   if (process.env.MIGRER_AU_DEMARRAGE !== "0") await migrer({ connectionString: config.databaseUrl });
 
   const db = creerBase({ connectionString: config.databaseUrl });
-  // Connexions de LECTURE : toute écriture y est refusée par PostgreSQL. Les routes GET les
-  // utilisent, ce qui garantit qu'une lecture ne modifie jamais rien, même par erreur.
-  const dbLecture = creerBase({ connectionString: config.databaseUrl, options: "-c default_transaction_read_only=on" });
   await db.initialiser();
-  await dbLecture.initialiser();
 
-  const app = creerApp({ db, dbLecture, config });
+  const app = creerApp({ db, config });
   const serveur = app.listen(config.port, () => console.log(`Belvie ERP — API à l'écoute sur le port ${config.port}`));
 
   nettoyerTeleversements();
@@ -29,7 +25,7 @@ async function demarrer() {
     clearInterval(minuteur);
     serveur.close();
     await fermerNavigateur();
-    await db.fermer(); await dbLecture.fermer();
+    await db.fermer();
     process.exit(0);
   };
   process.on("SIGTERM", arreter);

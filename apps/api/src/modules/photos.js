@@ -1,7 +1,8 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { dossierDonnees, resoudreTeleversement } = require("../lib/plateforme");
+const { dossierDonnees, resoudreTeleversement, libererCopieLocale } = require("../lib/plateforme");
+const stockage = require("../lib/stockage");
 const sharp = require("sharp");
 
 const ALLOWED_EXT = [".jpg", ".jpeg", ".png", ".webp"];
@@ -19,16 +20,11 @@ function getThumbsDir() {
   return path.join(getImagesDir(), "thumbs");
 }
 
-function ensureDirs() {
-  fs.mkdirSync(getImagesDir(), { recursive: true });
-  fs.mkdirSync(getThumbsDir(), { recursive: true });
-}
-
-// Chemin relatif au dossier de données (jamais un chemin absolu propre à une machine),
-// avec des séparateurs "/" uniformes quel que soit l'OS.
-function toRelative(absPath) {
-  return path.relative(getUserDataDir(), absPath).split(path.sep).join("/");
-}
+// Les fichiers sont rangés par lib/stockage.js (disque ou Cloudflare R2), toujours sous des
+// chemins RELATIFS identiques à ceux de la version Electron : « images/commandes/<uuid>.jpg ».
+const DOSSIER_PHOTOS = "images/commandes";
+const DOSSIER_LOGO = "images/entreprise";
+const DOSSIER_BC_PF = "images/bc_pf";
 
 function validateFile(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -49,36 +45,37 @@ function validateFile(filePath) {
 // qui a été rangé dans les téléversements. On le valide et on renvoie le même aperçu que
 // l'ancien sélecteur natif — sans encore rien copier dans le stockage de l'ERP. `filePath` est
 // l'identifiant de téléversement, que l'interface repasse tel quel à ajouterPhoto / setLogo…
-function decrireTeleversement(jeton, nomOriginal) {
+async function decrireTeleversement(jeton, nomOriginal) {
+  let filePath = null;
   try {
-    const filePath = resoudreTeleversement(jeton);
+    filePath = await resoudreTeleversement(jeton);
     const { ext, size } = validateFile(filePath);
     const buffer = fs.readFileSync(filePath);
     const dataUrl = `data:${MIME_BY_EXT[ext]};base64,${buffer.toString("base64")}`;
     return { canceled: false, filePath: jeton, fileName: nomOriginal || path.basename(filePath), sizeBytes: size, dataUrl };
   } catch (err) {
     return { canceled: false, error: err.message };
+  } finally {
+    libererCopieLocale(filePath);
   }
 }
 
 // Copie le fichier choisi dans le stockage géré par l'ERP, sous un nom unique, et génère
 // une miniature optimisée pour le tableau. Retourne les chemins RELATIFS à enregistrer en base.
 async function copyIntoStore(sourcePath) {
-  ensureDirs();
   const { ext } = validateFile(sourcePath); // re-vérifié : le fichier a pu changer entre la sélection et l'enregistrement
+  const contenu = fs.readFileSync(sourcePath);
 
   const uniqueName = `${crypto.randomUUID()}${ext}`;
-  const destAbs = path.join(getImagesDir(), uniqueName);
-  fs.copyFileSync(sourcePath, destAbs);
+  const photo_path = `${DOSSIER_PHOTOS}/${uniqueName}`;
+  await stockage.ecrire(photo_path, contenu);
 
-  const photo_path = toRelative(destAbs);
   let photo_thumb_path = photo_path; // repli par défaut si la génération de miniature échoue
-
   try {
-    const thumbName = `${path.parse(uniqueName).name}.jpg`;
-    const thumbAbs = path.join(getThumbsDir(), thumbName);
-    await sharp(destAbs).rotate().resize(THUMB_SIZE, THUMB_SIZE, { fit: "cover" }).jpeg({ quality: 72 }).toFile(thumbAbs);
-    photo_thumb_path = toRelative(thumbAbs);
+    const miniature = await sharp(contenu).rotate().resize(THUMB_SIZE, THUMB_SIZE, { fit: "cover" }).jpeg({ quality: 72 }).toBuffer();
+    const rel = `${DOSSIER_PHOTOS}/thumbs/${path.parse(uniqueName).name}.jpg`;
+    await stockage.ecrire(rel, miniature);
+    photo_thumb_path = rel;
   } catch (err) {
     console.error("Génération de la miniature impossible, utilisation de l'image d'origine :", err);
   }
@@ -97,12 +94,7 @@ async function isReferenced(db, relPath, excludeArticlePhotoId) {
 async function removeFileIfOrphan(db, relPath, excludeArticlePhotoId) {
   if (!relPath) return;
   if (await isReferenced(db, relPath, excludeArticlePhotoId)) return; // encore utilisée ailleurs : on ne touche à rien
-  const abs = path.join(getUserDataDir(), relPath);
-  try {
-    if (fs.existsSync(abs)) fs.unlinkSync(abs);
-  } catch (err) {
-    console.error("Impossible de supprimer le fichier image devenu orphelin :", err);
-  }
+  await stockage.supprimerSansErreur(relPath, "Suppression de l'image devenue orpheline");
 }
 
 // À appeler après avoir remplacé ou retiré une photo d'article : libère l'ancien fichier
@@ -112,76 +104,53 @@ async function cleanupOldPhoto(db, oldPhotoPath, oldThumbPath, excludeArticlePho
   if (oldThumbPath && oldThumbPath !== oldPhotoPath) await removeFileIfOrphan(db, oldThumbPath, excludeArticlePhotoId);
 }
 
-function getEntrepriseDir() {
-  return path.join(getUserDataDir(), "images", "entreprise");
-}
-
 // Copie et redimensionne le logo en un SEUL fichier (pas de miniature séparée : un logo
 // correctement redimensionné à l'affichage suffit pour cette version). Le fichier d'origine
 // choisi par l'utilisateur n'est jamais référencé directement : toujours une copie interne,
 // pour que le logo ne disparaisse pas si le fichier source est déplacé ou supprimé.
 async function copyLogoIntoStore(sourcePath) {
   const { ext } = validateFile(sourcePath);
-  const dir = getEntrepriseDir();
-  fs.mkdirSync(dir, { recursive: true });
-
+  const contenu = fs.readFileSync(sourcePath);
   try {
-    const destAbs = path.join(dir, `logo-${crypto.randomUUID()}.jpg`);
-    await sharp(sourcePath).rotate().resize(480, 480, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 90 }).toFile(destAbs);
-    return { logo_path: toRelative(destAbs) };
+    const rel = `${DOSSIER_LOGO}/logo-${crypto.randomUUID()}.jpg`;
+    await stockage.ecrire(rel, await sharp(contenu).rotate().resize(480, 480, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer());
+    return { logo_path: rel };
   } catch (err) {
     // Repli : copie brute si le redimensionnement échoue (format inhabituel, etc.).
     console.error("Redimensionnement du logo impossible, copie de l'original :", err);
-    const fallbackAbs = path.join(dir, `logo-${crypto.randomUUID()}${ext}`);
-    fs.copyFileSync(sourcePath, fallbackAbs);
-    return { logo_path: toRelative(fallbackAbs) };
+    const rel = `${DOSSIER_LOGO}/logo-${crypto.randomUUID()}${ext}`;
+    await stockage.ecrire(rel, contenu);
+    return { logo_path: rel };
   }
 }
 
 // Un seul logo existe jamais à la fois (une seule ligne "entreprise") : pas besoin de vérifier
 // s'il est "encore référencé ailleurs" comme pour les photos d'article, partagées entre plusieurs
 // commandes.
-function removeLogoFile(relPath) {
-  if (!relPath) return;
-  const abs = path.join(getUserDataDir(), relPath);
-  try {
-    if (fs.existsSync(abs)) fs.unlinkSync(abs);
-  } catch (err) {
-    console.error("Impossible de supprimer l'ancien logo :", err);
-  }
-}
-
-function getBcPfDir() {
-  return path.join(getUserDataDir(), "images", "bc_pf");
+async function removeLogoFile(relPath) {
+  await stockage.supprimerSansErreur(relPath, "Suppression de l'ancien logo");
 }
 
 // Copie une photo DÉJÀ interne (ex: photo principale d'un article) vers un nouvel emplacement
 // dédié à un document figé dans le temps (BC PF aujourd'hui, réutilisable pour BC MP plus tard).
 // Contrairement à copyIntoStore/copyLogoIntoStore, la source est déjà un fichier géré par
 // l'application (pas un chemin choisi par l'utilisateur) : pas de revalidation de format/taille
-// nécessaire, une simple copie physique suffit. Ne lève jamais d'erreur : l'absence de photo ou
+// nécessaire, une simple copie suffit. Ne lève jamais d'erreur : l'absence de photo ou
 // un fichier source manquant ne doivent jamais empêcher la création du document.
-function snapshotArticlePhoto(articlePhotoRelPath) {
+async function snapshotArticlePhoto(articlePhotoRelPath) {
   if (!articlePhotoRelPath) return null;
-  const srcAbs = path.join(getUserDataDir(), articlePhotoRelPath);
-  if (!fs.existsSync(srcAbs)) return null;
-
-  const dir = getBcPfDir();
-  fs.mkdirSync(dir, { recursive: true });
-  const ext = path.extname(srcAbs) || ".jpg";
-  const destAbs = path.join(dir, `bcpf-${crypto.randomUUID()}${ext}`);
-  fs.copyFileSync(srcAbs, destAbs);
-  return toRelative(destAbs);
+  try {
+    const ext = path.extname(articlePhotoRelPath) || ".jpg";
+    const rel = `${DOSSIER_BC_PF}/bcpf-${crypto.randomUUID()}${ext}`;
+    return (await stockage.copier(articlePhotoRelPath, rel)) ? rel : null;
+  } catch (err) {
+    console.error("Copie de la photo pour le document impossible (non bloquant) :", err.message);
+    return null;
+  }
 }
 
-function removeSnapshotFile(relPath) {
-  if (!relPath) return;
-  const abs = path.join(getUserDataDir(), relPath);
-  try {
-    if (fs.existsSync(abs)) fs.unlinkSync(abs);
-  } catch (err) {
-    console.error("Impossible de supprimer le snapshot photo :", err);
-  }
+async function removeSnapshotFile(relPath) {
+  await stockage.supprimerSansErreur(relPath, "Suppression du snapshot photo");
 }
 
 module.exports = {
@@ -194,5 +163,4 @@ module.exports = {
   removeSnapshotFile,
   getUserDataDir,
   getImagesDir,
-  ensureDirs,
 };

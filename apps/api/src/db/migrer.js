@@ -69,7 +69,9 @@ async function migrer({ connectionString, statutSeul = false, journal = console.
 
 if (require.main === module) {
   const config = chargerConfiguration();
-  migrer({ connectionString: config.databaseUrl, statutSeul: process.argv.includes("--statut") })
+  // Les migrations ont besoin d'une connexion DIRECTE (verrou consultatif, transactions DDL) :
+  // sur Neon/Vercel, l'URL sans pooler est fournie dans DATABASE_URL_UNPOOLED.
+  migrer({ connectionString: process.env.DATABASE_URL_UNPOOLED || config.databaseUrl, statutSeul: process.argv.includes("--statut") })
     .catch((err) => { console.error(err.message); process.exit(1); });
 }
 

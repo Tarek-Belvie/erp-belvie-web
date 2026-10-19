@@ -2,17 +2,19 @@
 
 ERP de production textile de Belvie : articles et fiches techniques, commandes de production, planning, bons de commande (produits finis et matières premières), approvisionnement, finance.
 
-Depuis la version 2, c'est une **application web** : une interface React servie par Vercel, et une API Node.js/Express avec une base **PostgreSQL**. Elle remplace l'application de bureau Electron/SQLite 1.0.1, dont le code est conservé dans l'historique Git (tag `electron-1.0.1`).
+Depuis la version 2, c'est une **application web** hébergée entièrement sur **Vercel** : une interface React et une API Node.js/Express (fonction serverless), avec une base **PostgreSQL Neon** et les fichiers sur **Cloudflare R2**. Elle remplace l'application de bureau Electron/SQLite 1.0.1, dont le code est conservé dans l'historique Git (tag `electron-1.0.1`).
 
 ```
-Navigateur ──► Vercel (interface React)
-                 │  /api/*  et  /media/*  (réécritures, même origine)
-                 ▼
-              Serveur : Caddy (HTTPS) ──► API Node/Express ──► PostgreSQL (Neon ou serveur)
-                                            │
-                                            ├── fichiers (photos, croquis, logo) : volume /donnees
-                                            └── sauvegarde quotidienne ──► Cloudflare R2 + e-mail
+Navigateur ──► Vercel (Francfort)
+                 ├── interface React (fichiers statiques)
+                 └── /api/*, /media/* ──► fonction api/index.js (Express) ──► PostgreSQL Neon (Francfort)
+                                                  └── fichiers (photos, croquis, logo) ──► Cloudflare R2
+GitHub Actions, chaque nuit à minuit ──► pg_dump de Neon ──► R2 (5 versions)
 ```
+
+Déploiement : [`docs/deploiement.md`](docs/deploiement.md).
+
+**Essayer sur un PC Windows, avec les vraies données Electron** : double-clic sur `demarrer-en-local.bat`.
 
 ## Démarrer en local
 

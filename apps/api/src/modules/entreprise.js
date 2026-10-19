@@ -39,13 +39,13 @@ async function setLogo(db, sourcePath) {
   } else {
     await db.prepare("UPDATE entreprise SET logo_path = @logo_path WHERE id = 1").run({ logo_path: logo_path });
   }
-  if (oldLogoPath && oldLogoPath !== logo_path) photos.removeLogoFile(oldLogoPath);
+  if (oldLogoPath && oldLogoPath !== logo_path) await photos.removeLogoFile(oldLogoPath);
   return await get(db);
 }
 
 async function removeLogo(db) {
   const current = await get(db);
-  if (current && current.logo_path) photos.removeLogoFile(current.logo_path);
+  if (current && current.logo_path) await photos.removeLogoFile(current.logo_path);
   await db.prepare("UPDATE entreprise SET logo_path = NULL WHERE id = 1").run();
   return await get(db);
 }

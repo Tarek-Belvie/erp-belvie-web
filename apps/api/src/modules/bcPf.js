@@ -48,7 +48,7 @@ async function snapshotEntreprise(db) {
   if (!e) return { logoSnapshotPath: null, fields: {} };
   let logoSnapshotPath = null;
   try {
-    logoSnapshotPath = photos.snapshotArticlePhoto(e.logo_path);
+    logoSnapshotPath = await photos.snapshotArticlePhoto(e.logo_path);
   } catch (err) {
     console.error("Snapshot du logo entreprise impossible (non bloquant) :", err);
   }
@@ -141,15 +141,15 @@ async function creerBcPf(db, commandeId) {
 
   let photoSnapshotPath = null;
   try {
-    photoSnapshotPath = photos.snapshotArticlePhoto(source.photo_path);
+    photoSnapshotPath = await photos.snapshotArticlePhoto(source.photo_path);
   } catch (err) {
     console.error("Snapshot de la photo impossible, le BC sera créé sans photo :", err);
   }
   const entrepriseSnap = await snapshotEntreprise(db);
 
-  const cleanup = function () {
-    if (photoSnapshotPath) photos.removeSnapshotFile(photoSnapshotPath);
-    if (entrepriseSnap.logoSnapshotPath) photos.removeSnapshotFile(entrepriseSnap.logoSnapshotPath);
+  const cleanup = async function () {
+    if (photoSnapshotPath) await photos.removeSnapshotFile(photoSnapshotPath);
+    if (entrepriseSnap.logoSnapshotPath) await photos.removeSnapshotFile(entrepriseSnap.logoSnapshotPath);
   };
 
   let bcId;
@@ -164,7 +164,7 @@ async function creerBcPf(db, commandeId) {
     });
     await tx();
   } catch (err) {
-    cleanup();
+    await cleanup();
     throw err;
   }
   return await get(db, bcId);
@@ -282,15 +282,15 @@ async function remplacerBcPf(db, ancienBcPfId, motif) {
 
   let photoSnapshotPath = null;
   try {
-    photoSnapshotPath = photos.snapshotArticlePhoto(source.photo_path);
+    photoSnapshotPath = await photos.snapshotArticlePhoto(source.photo_path);
   } catch (err) {
     console.error("Snapshot de la photo impossible, le nouveau BC sera créé sans photo :", err);
   }
   const entrepriseSnap = await snapshotEntreprise(db);
 
-  const cleanup = function () {
-    if (photoSnapshotPath) photos.removeSnapshotFile(photoSnapshotPath);
-    if (entrepriseSnap.logoSnapshotPath) photos.removeSnapshotFile(entrepriseSnap.logoSnapshotPath);
+  const cleanup = async function () {
+    if (photoSnapshotPath) await photos.removeSnapshotFile(photoSnapshotPath);
+    if (entrepriseSnap.logoSnapshotPath) await photos.removeSnapshotFile(entrepriseSnap.logoSnapshotPath);
   };
 
   let nouveauId;
@@ -305,7 +305,7 @@ async function remplacerBcPf(db, ancienBcPfId, motif) {
     });
     await tx();
   } catch (err) {
-    cleanup();
+    await cleanup();
     throw err;
   }
   return await get(db, nouveauId);

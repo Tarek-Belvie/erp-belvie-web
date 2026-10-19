@@ -21,6 +21,7 @@ const demoData = require("../lib/demoData");
 const DEFAULTS = require("../lib/defaults");
 const { normalizeNom } = require("../lib/normalize");
 const { dossierDonnees } = require("../lib/plateforme");
+const sauvegardesR2 = require("../lib/sauvegardesR2");
 
 const executer = promisify(execFile);
 const FORMAT_MANIFESTE = 2;
@@ -58,6 +59,7 @@ async function comptagesTables(db) {
 // Sauvegarde complète : base (pg_dump, format custom) + fichiers (images…) + manifeste.
 // ------------------------------------------------------------------------------------------------
 async function backup(db, options = {}) {
+  if (sauvegardesR2.actif()) throw new Error(sauvegardesR2.MESSAGE_SAUVEGARDE_MANUELLE);
   const motif = String((options && options.motif) || "manuelle").replace(/[^a-z0-9-]/gi, "-").slice(0, 40);
   const nom = `belvie-${horodatage()}-${motif}`;
   const cible = path.join(dossierSauvegardes(), nom);
@@ -96,6 +98,7 @@ async function backupAvantOperation(db, motif) {
 // Contrôles : manifeste lisible et au bon format, empreintes identiques, archive de base lisible
 // par pg_restore. « Non effectué » ne vaut jamais réussite.
 async function verifierSauvegarde(nom) {
+  if (sauvegardesR2.actif()) return sauvegardesR2.verifier(nom);
   const dossier = path.join(dossierSauvegardes(), path.basename(String(nom || "")));
   const controles = [];
   const ajouter = (libelle, ok, detail) => controles.push({ libelle, ok, detail: detail || null });
@@ -121,6 +124,7 @@ async function verifierSauvegarde(nom) {
 }
 
 async function listerSauvegardes() {
+  if (sauvegardesR2.actif()) return sauvegardesR2.lister();
   const d = dossierSauvegardes();
   return fs.readdirSync(d).filter((n) => fs.existsSync(path.join(d, n, "manifeste.json"))).sort().reverse().map((n) => {
     let m = {};
@@ -139,6 +143,7 @@ async function autoBackup(db, garder = 10) {
 }
 
 function cheminFichierSauvegarde(nom, fichier) {
+  if (sauvegardesR2.actif()) throw new Error("Sur la version en ligne, utiliser le bouton « Télécharger » (lien sécurisé).");
   if (!["base.dump", "fichiers.tar.gz", "manifeste.json"].includes(fichier)) throw new Error("Fichier de sauvegarde inconnu.");
   const p = path.join(dossierSauvegardes(), path.basename(String(nom || "")), fichier);
   if (!fs.existsSync(p)) throw new Error("Sauvegarde introuvable.");

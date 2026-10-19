@@ -4,20 +4,18 @@
 
 ```mermaid
 flowchart LR
-  N[Navigateur] -->|HTTPS| V[Vercel<br/>interface React]
-  V -->|réécriture /api, /media| C[Caddy<br/>HTTPS]
-  C --> A[API Node/Express]
-  A -->|pg| P[(PostgreSQL)]
-  A --> F[/Volume /donnees<br/>photos, croquis, logo/]
-  S[Planificateur de sauvegarde] -->|pg_dump| P
-  S -->|S3| R[(Cloudflare R2<br/>5 versions)]
-  S -->|SMTP| M[E-mail de compte rendu]
+  N[Navigateur] -->|HTTPS| V[Vercel fra1<br/>interface React]
+  V -->|réécriture /api, /media| A[Fonction serverless<br/>api/index.js — Express]
+  A -->|pg, pooler| P[(PostgreSQL Neon<br/>Francfort)]
+  A -->|S3| F[(Cloudflare R2<br/>fichiers/ : photos, croquis, logo)]
+  G[GitHub Actions<br/>chaque nuit 00:00 Paris] -->|pg_dump| P
+  G -->|S3| B[(Cloudflare R2<br/>base/ : 5 versions)]
 ```
 
 - **Interface** (`apps/web`) : l'application React de la v1.0.1, quasiment inchangée. Les écrans appellent toujours `window.api.<espace>.<methode>(…)`. C'est `src/api/client.ts` qui construit cet objet au-dessus de l'API HTTP.
-- **API** (`apps/api`) : Express. Elle ne contient aucune logique dans les routes : chaque route appelle une fonction métier de `src/modules`.
-- **Base** : PostgreSQL 16+ (Neon ou conteneur sur le serveur, au choix ; seul `DATABASE_URL` change).
-- **Fichiers** : sur le volume `/donnees/fichiers` du serveur. L'arborescence (`images/commandes`, `images/fiches-techniques`…) est celle de l'ancien dossier `%APPDATA%\belvie-erp`, et les chemins enregistrés en base n'ont pas changé.
+- **API** (`apps/api`) : Express. Elle ne contient aucune logique dans les routes : chaque route appelle une fonction métier de `src/modules`. Sur Vercel, `api/index.js` (racine du dépôt) crée l'application une fois par instance ; sur un serveur classique, `apps/api/src/server.js` fait la même chose avec `app.listen`.
+- **Base** : PostgreSQL 16+ (Neon en production ; seul `DATABASE_URL` change). Migrations appliquées au build de production (`tools/vercel/build.js`) ou au démarrage du serveur.
+- **Fichiers** : `src/lib/stockage.js`, mode `r2` en production (`disque` en local). L'arborescence (`images/commandes`, `images/fiches-techniques`…) est celle de l'ancien dossier `%APPDATA%\belvie-erp`, et les chemins enregistrés en base n'ont pas changé.
 
 ## Parcours d'une requête
 

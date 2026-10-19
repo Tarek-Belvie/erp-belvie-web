@@ -82,10 +82,36 @@ function choisirFichier(accept: string): Promise<File | null> {
   });
 }
 
+// La version en ligne (Vercel) refuse les requêtes de plus de 4,5 Mo, et la réponse renvoie l'image
+// en base64 (+33 %). Une photo de plus de 3 Mo (téléphone, appareil photo) est donc réduite dans le
+// navigateur avant l'envoi : 2560 px au plus grand côté, qualité décroissante jusqu'à passer sous
+// 3 Mo. Les PNG deviennent des WebP (transparence conservée), les JPEG restent des JPEG.
+const TAILLE_MAX_ENVOI = 3 * 1024 * 1024;
+async function reduireSiNecessaire(fichier: File): Promise<File> {
+  if (fichier.size <= TAILLE_MAX_ENVOI || !/^image\/(jpeg|png|webp)$/.test(fichier.type)) return fichier;
+  try {
+    const image = await createImageBitmap(fichier);
+    const echelle = Math.min(1, 2560 / Math.max(image.width, image.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(image.width * echelle);
+    canvas.height = Math.round(image.height * echelle);
+    canvas.getContext("2d")!.drawImage(image, 0, 0, canvas.width, canvas.height);
+    image.close();
+    const type = fichier.type === "image/jpeg" ? "image/jpeg" : "image/webp";
+    const ext = type === "image/jpeg" ? ".jpg" : ".webp";
+    for (const qualite of [0.88, 0.8, 0.7, 0.6, 0.5]) {
+      const blob: Blob | null = await new Promise((ok) => canvas.toBlob(ok, type, qualite));
+      if (blob && blob.size <= TAILLE_MAX_ENVOI) return new File([blob], fichier.name.replace(/\.[^.]+$/, "") + ext, { type });
+    }
+  } catch (_) { /* navigateur incapable de réduire : on envoie l'original, le serveur dira s'il est trop lourd */ }
+  return fichier;
+}
+
 // Même forme de résultat que l'ancien photos:pick : { canceled, filePath, fileName, sizeBytes, dataUrl } | { canceled:false, error }
 async function choisirImage() {
-  const fichier = await choisirFichier("image/jpeg,image/png,image/webp");
-  if (!fichier) return { canceled: true };
+  const choisi = await choisirFichier("image/jpeg,image/png,image/webp");
+  if (!choisi) return { canceled: true };
+  const fichier = await reduireSiNecessaire(choisi);
   const formulaire = new FormData();
   formulaire.append("fichier", fichier, fichier.name);
   const res = await fetch(`${BASE}/api/fichiers`, { method: "POST", credentials: "include", headers: { "X-Belvie": "1" }, body: formulaire });
@@ -136,6 +162,8 @@ export function construireApi() {
   system.listerSauvegardes = () => get("/system/listerSauvegardes");
   system.verifierSauvegarde = (dossier?: string) => get("/system/verifierSauvegarde", ["dossier"], [dossier]);
   system.telechargerSauvegarde = (nom: string, fichier: string) => telecharger("/system/telechargerSauvegarde", ["nom", "fichier"], [nom, fichier], `${nom}-${fichier}`);
+  system.modeSauvegardes = () => get("/system/modeSauvegardes");
+  system.lienSauvegarde = (nom: string) => get("/system/lienSauvegarde", ["nom"], [nom]);
   system.dossierExterne = () => get("/system/dossierExterne");
   system.loadDemoData = () => post("/system/loadDemoData");
   system.clearDemoData = () => post("/system/clearDemoData");

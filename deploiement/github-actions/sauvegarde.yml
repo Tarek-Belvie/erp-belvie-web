@@ -1,0 +1,90 @@
+# ==================================================================================================
+# Sauvegarde de la base de production (Neon) vers Cloudflare R2 — chaque nuit à minuit, heure de Paris.
+#
+# Déroulé : apps/api/scripts/sauvegarde-r2.js (pg_dump → contrôle → envoi R2 → relecture → rotation
+# des 5 dernières versions → e-mail si SMTP configuré), puis nettoyage des téléversements abandonnés.
+#
+# Secrets à créer UNE fois : GitHub → dépôt → Settings → Secrets and variables → Actions →
+#   DATABASE_URL_UNPOOLED   (Vercel → Storage → base Neon → .env.local : la ligne DATABASE_URL_UNPOOLED)
+#   R2_ENDPOINT
+#   R2_SAUVEGARDES_BUCKET + R2_SAUVEGARDES_ECRITURE_ACCESS_KEY_ID / _SECRET_ACCESS_KEY
+#       → bucket des sauvegardes et clé lecture/écriture limitée à ce bucket (seul GitHub écrit dedans)
+#   R2_BUCKET + R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY
+#       → bucket des fichiers de l'application (purge des téléversements abandonnés)
+#   (facultatif, pour l'e-mail) SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_DESTINATAIRE
+#
+# Sauvegarde immédiate : onglet Actions → « Sauvegarde de la base » → Run workflow.
+# ==================================================================================================
+name: Sauvegarde de la base
+
+on:
+  schedule:
+    # GitHub ne connaît que l'heure UTC : minuit à Paris = 22:00 UTC en été, 23:00 UTC en hiver.
+    # Les deux horaires sont programmés ; l'étape « Minuit à Paris ? » ne laisse passer que le bon.
+    - cron: "0 22 * * *"
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+
+concurrency: { group: sauvegarde, cancel-in-progress: false }
+
+jobs:
+  sauvegarder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Minuit à Paris ?
+        id: horaire
+        env: { PLANIF: "${{ github.event.schedule }}" }
+        run: |
+          if [ -z "$PLANIF" ]; then echo "lancer=1" >> "$GITHUB_OUTPUT"; echo "Lancement manuel."; exit 0; fi
+          DECALAGE=$(TZ=Europe/Paris date +%z)            # +0200 (été) ou +0100 (hiver)
+          if { [ "$PLANIF" = "0 22 * * *" ] && [ "$DECALAGE" = "+0200" ]; } || \
+             { [ "$PLANIF" = "0 23 * * *" ] && [ "$DECALAGE" = "+0100" ]; }; then
+            echo "lancer=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "lancer=0" >> "$GITHUB_OUTPUT"; echo "Horaire de l'autre saison ($PLANIF, Paris $DECALAGE) : rien à faire."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.horaire.outputs.lancer == '1'
+      - uses: actions/setup-node@v4
+        if: steps.horaire.outputs.lancer == '1'
+        with: { node-version: 22, cache: npm }
+      - name: Client PostgreSQL 18 (pg_dump doit être d'une version ≥ celle du serveur)
+        if: steps.horaire.outputs.lancer == '1'
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update && sudo apt-get install -y postgresql-client-18
+          echo "/usr/lib/postgresql/18/bin" >> $GITHUB_PATH
+      - name: Dépendances
+        if: steps.horaire.outputs.lancer == '1'
+        run: npm ci --workspace apps/api --no-audit --no-fund
+
+      - name: Sauvegarde
+        if: steps.horaire.outputs.lancer == '1'
+        working-directory: apps/api
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_SAUVEGARDES_ECRITURE_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SAUVEGARDES_ECRITURE_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_SAUVEGARDES_BUCKET }}
+          R2_VERSIONS: "5"
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
+        run: node scripts/sauvegarde-r2.js
+
+      - name: Nettoyage des téléversements abandonnés (plus de 24 h)
+        if: steps.horaire.outputs.lancer == '1'
+        working-directory: apps/api
+        env:
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: node scripts/nettoyer-televersements.js

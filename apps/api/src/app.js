@@ -7,7 +7,7 @@ const { creerAuth } = require("./auth");
 const { monterRegistre } = require("./routes/index");
 const { monterSpeciales, routeMedias } = require("./routes/speciales");
 
-function creerApp({ db, dbLecture, config }) {
+function creerApp({ db, config }) {
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", config.trustProxy > 0 ? config.trustProxy : false);
@@ -48,8 +48,8 @@ function creerApp({ db, dbLecture, config }) {
   app.get("/api/auth/moi", (req, res) => res.json({ resultat: req.utilisateur }));
 
   app.use("/media", auth.exigerSession, routeMedias());
-  app.use("/api", monterSpeciales({ db, dbLecture, exigerAdmin: auth.exigerAdmin }));
-  app.use("/api", monterRegistre({ db, dbLecture }));
+  app.use("/api", monterSpeciales({ db, exigerAdmin: auth.exigerAdmin }));
+  app.use("/api", monterRegistre({ db }));
   app.use("/api", (_req, res) => res.status(404).json({ erreur: "Route inconnue." }));
 
   // Erreurs : une règle métier (Error levée par un module) → 400 avec son message, tel que

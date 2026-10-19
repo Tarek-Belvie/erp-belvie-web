@@ -8,9 +8,11 @@ const os = require("os");
 const path = require("path");
 const express = require("express");
 const multer = require("multer");
-const { enregistrerTeleversement, dossierDonnees, cheminMedia } = require("../lib/plateforme");
+const { enregistrerTeleversement } = require("../lib/plateforme");
+const { lire, typeDe, verifierRelatif, stockage } = require("../lib/stockage");
 const { lireParametre } = require("./index");
 const photos = require("../modules/photos");
+const sauvegardesR2 = require("../lib/sauvegardesR2");
 const bcPf = require("../modules/bcPf");
 const bcPfPdf = require("../modules/bcPfPdf");
 const commandes = require("../modules/commandes");
@@ -42,17 +44,20 @@ async function genererPdf(construire, nomFichier, res) {
 }
 const indisponible = (message) => (_req, res) => res.status(400).json({ erreur: message });
 
-function monterSpeciales({ db, dbLecture, exigerAdmin }) {
+function monterSpeciales({ db, exigerAdmin }) {
+  const dbLecture = db; // lectures : même base (les générateurs PDF/export ne font que lire)
   const r = express.Router();
   const q = (req, nom) => lireParametre(req.query[nom]);
 
   // --- Envoi d'un fichier (remplace les sélecteurs natifs photos:pick, entreprise:pickLogo,
   //     ficheTechnique:pickCroquis, ficheTechnique:pickAccessoirePhoto). Renvoie le même aperçu.
-  r.post("/fichiers", envoi.single("fichier"), (req, res) => {
-    if (!req.file) return res.status(400).json({ erreur: "Aucun fichier reçu." });
-    const nomOriginal = Buffer.from(req.file.originalname, "latin1").toString("utf8");
-    const jeton = enregistrerTeleversement(req.file.buffer, nomOriginal);
-    res.json({ resultat: photos.decrireTeleversement(jeton, nomOriginal) });
+  r.post("/fichiers", envoi.single("fichier"), async (req, res, next) => {
+    try {
+      if (!req.file) return res.status(400).json({ erreur: "Aucun fichier reçu." });
+      const nomOriginal = Buffer.from(req.file.originalname, "latin1").toString("utf8");
+      const jeton = await enregistrerTeleversement(req.file.buffer, nomOriginal);
+      res.json({ resultat: await photos.decrireTeleversement(jeton, nomOriginal) });
+    } catch (err) { next(err); }
   });
 
   // --- PDF
@@ -117,6 +122,15 @@ function monterSpeciales({ db, dbLecture, exigerAdmin }) {
       res.download(p, `${path.basename(path.dirname(p))}-${path.basename(p)}`);
     } catch (err) { next(err); }
   });
+  // Mode des sauvegardes : « serveur » (pg_dump sur le serveur Docker) ou « r2 » (version en ligne :
+  // sauvegardes de la nuit dans Cloudflare R2, téléchargées par lien signé).
+  r.get("/system/modeSauvegardes", exigerAdmin, (_req, res) => res.json({ resultat: { mode: sauvegardesR2.actif() ? "r2" : "serveur" } }));
+  r.get("/system/lienSauvegarde", exigerAdmin, async (req, res, next) => {
+    try {
+      if (!sauvegardesR2.actif()) return res.status(400).json({ erreur: "Lien disponible uniquement pour la version en ligne." });
+      res.json({ resultat: await sauvegardesR2.lienTelechargement(q(req, "nom")) });
+    } catch (err) { next(err); }
+  });
   r.get("/system/dossierExterne", (_req, res) => res.json({ resultat: { dossier: null } }));
   const msgRestauration = "La restauration se fait sur le serveur par un administrateur (procédure : docs/exploitation/sauvegarde-restauration.md).";
   r.post("/system/restore", indisponible(msgRestauration));
@@ -134,12 +148,31 @@ function monterSpeciales({ db, dbLecture, exigerAdmin }) {
 }
 
 // Fichiers médias (photos, logo, croquis) : uniquement le dossier images/, session obligatoire.
+// Servis depuis le stockage (disque ou R2) ; les noms sont uniques (UUID) donc jamais modifiés :
+// le navigateur peut les garder en cache.
 function routeMedias() {
-  return (req, res) => {
-    let abs;
-    try { abs = cheminMedia(decodeURIComponent(req.path.replace(/^\//, ""))); } catch (_) { return res.status(400).end(); }
-    if (!abs.startsWith(path.join(dossierDonnees(), "images") + path.sep)) return res.status(404).end();
-    res.sendFile(abs, { maxAge: "7d", dotfiles: "deny" }, (err) => { if (err && !res.headersSent) res.status(404).end(); });
+  return async (req, res) => {
+    let rel;
+    try { rel = verifierRelatif(decodeURIComponent(req.path.replace(/^\//, ""))); } catch (_) { return res.status(400).end(); }
+    if (!rel.startsWith("images/")) return res.status(404).end();
+    try {
+      // Mode R2 : redirection vers un lien signé d'une heure (session déjà vérifiée par l'API). La
+      // redirection elle-même est gardée 50 minutes par le navigateur : pas d'appel à chaque affichage.
+      const s = stockage();
+      if (s.mode === "r2") {
+        res.setHeader("Cache-Control", "private, max-age=3000");
+        return res.redirect(302, await s.lienSigne(rel, 3600));
+      }
+      const contenu = await lire(rel);
+      if (!contenu) return res.status(404).end();
+      res.setHeader("Content-Type", typeDe(rel));
+      res.setHeader("Cache-Control", "private, max-age=604800, immutable");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.send(contenu);
+    } catch (err) {
+      console.error("Lecture du média impossible :", rel, err.message);
+      res.status(502).end();
+    }
   };
 }
 
@@ -150,6 +183,7 @@ const CHEMINS_SPECIAUX = new Set([
   "/system/backup", "/system/backupAvantOperation", "/system/listerSauvegardes", "/system/verifierSauvegarde",
   "/system/telechargerSauvegarde", "/system/dossierExterne", "/system/restore", "/system/essaiRestauration",
   "/system/choisirDossierExterne", "/system/oublierDossierExterne", "/system/loadDemoData", "/system/clearDemoData", "/system/version",
+  "/system/modeSauvegardes", "/system/lienSauvegarde",
 ]);
 
 module.exports = { monterSpeciales, routeMedias, CHEMINS_SPECIAUX };

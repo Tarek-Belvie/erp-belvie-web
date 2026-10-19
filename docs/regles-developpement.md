@@ -53,9 +53,10 @@ Les **règles métier** (calculer jamais recopier, rien de silencieux, rien de r
 
 ## 7. Déploiement et exploitation
 
-- **D28 — Déploiement depuis `main` uniquement**, après CI verte. Front : Vercel (automatique sur `main`). API : `git pull && docker compose up -d --build` sur le serveur (les migrations s'appliquent au démarrage).
-- **D29 — Sauvegarde avant toute opération risquée** (migration de données, reprise, restauration) : `system:backupAvantOperation` ou `npm run sauvegarde:r2`.
+- **D28 — Déploiement depuis `main` uniquement**, après CI verte. Tout est sur Vercel (automatique sur `main`) ; les migrations sont appliquées à la fin du build de production ([deploiement.md](deploiement.md)).
+- **D29 — Sauvegarde avant toute opération risquée** (migration de données, reprise, restauration) : GitHub → Actions → « Sauvegarde de la base » → *Run workflow*, puis vérifier dans Paramètres → Sauvegardes.
 - **D30 — Une restauration s'entraîne.** Une fois par trimestre, restaurer la dernière sauvegarde R2 dans une base de test et vérifier les comptages (procédure : [exploitation/sauvegarde-restauration.md](exploitation/sauvegarde-restauration.md)).
+- **D31 — Une migration reste compatible avec la version précédente du code.** Pendant le build, puis en cas de retour arrière Vercel, l'ancienne version tourne sur le schéma déjà migré. On ajoute (table, colonne avec valeur par défaut) dans une version ; on ne supprime ni ne renomme qu'une version plus tard, quand plus aucun code ne s'en sert.
 
 ## 8. Liste de contrôle d'une pull request
 

@@ -27,12 +27,75 @@ export default function SauvegardeSection({ notify }: { notify: (m: string) => v
   const [occupe, setOccupe] = useState<string | null>(null);
   const [controles, setControles] = useState<{ nom: string; ok: boolean; controles: Controle[] } | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
+  // « r2 » = version en ligne : sauvegardes automatiques de la nuit, pas de sauvegarde manuelle ici.
+  const [mode, setMode] = useState<"serveur" | "r2" | null>(null);
 
   async function charger() {
     try { setListe(await api().system.listerSauvegardes()); setErreur(null); }
     catch (err: any) { setErreur(err?.message || "Liste des sauvegardes indisponible."); }
   }
-  useEffect(() => { charger(); }, []);
+  useEffect(() => {
+    api().system.modeSauvegardes().then((r: any) => setMode(r.mode)).catch(() => setMode("serveur"));
+    charger();
+  }, []);
+
+  async function telechargerEnLigne(nom: string) {
+    setErreur(null);
+    try {
+      const { url } = await api().system.lienSauvegarde(nom);
+      window.location.href = url; // lien signé, valable 5 minutes
+    } catch (err: any) { setErreur(err?.message || "Téléchargement impossible."); }
+  }
+
+  if (mode === "r2") {
+    return (
+      <div>
+        <p style={{ fontSize: 13, color: "#4B4B43", marginTop: 0 }}>
+          <strong>Chaque nuit à minuit</strong>, la base de données est sauvegardée automatiquement dans Cloudflare R2.
+          Les <strong>5 dernières</strong> sauvegardes sont conservées. Les images sont stockées en permanence dans R2 :
+          elles n'ont pas besoin d'être recopiées.
+        </p>
+        {erreur && <p style={{ color: "#B42318", fontSize: 13 }}>{erreur}</p>}
+        {controles && (
+          <div style={{ marginTop: 14, padding: 12, borderRadius: 8, background: controles.ok ? "#E7F4EC" : "#FDE8E8" }}>
+            <strong>{controles.ok ? "Sauvegarde exploitable" : "Problème détecté"}</strong> — {controles.nom}
+            <ul style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 12.5 }}>
+              {controles.controles.map((c) => (
+                <li key={c.libelle}>{c.ok ? "✔" : "✖"} {c.libelle}{c.detail ? ` — ${c.detail}` : ""}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <h4 style={{ margin: "18px 0 6px" }}>Sauvegardes de la base</h4>
+        {liste === null ? <p style={{ fontSize: 13 }}>Chargement…</p> : liste.length === 0 ? (
+          <p style={{ fontSize: 13, color: "#6B6B62" }}>Aucune sauvegarde pour l'instant : la première sera faite cette nuit à minuit.</p>
+        ) : (
+          <table className="table" style={{ width: "100%", fontSize: 13 }}>
+            <thead><tr><th>Date</th><th>Type</th><th>Taille</th><th></th></tr></thead>
+            <tbody>
+              {liste.map((s) => (
+                <tr key={s.nom}>
+                  <td>{s.cree_le ? new Date(s.cree_le).toLocaleString("fr-FR") : s.nom}</td>
+                  <td>{s.motif || "—"}</td>
+                  <td>{octets(s.taille)}</td>
+                  <td style={{ whiteSpace: "nowrap", textAlign: "right" }}>
+                    <button className="btn ghost tiny" disabled={!!occupe} onClick={() => verifier(s.nom)}>
+                      {occupe === "verif:" + s.nom ? "Vérification…" : "Vérifier"}
+                    </button>{" "}
+                    <button className="btn ghost tiny" onClick={() => telechargerEnLigne(s.nom)}>Télécharger</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <p style={{ fontSize: 12, color: "#6B6B62", marginTop: 12 }}>
+          Besoin d'une sauvegarde immédiate (avant une grosse opération) ? GitHub → dépôt erp-belvie-web → Actions →
+          « Sauvegarde de la base » → Run workflow. La restauration suit la procédure documentée, jamais cet écran.
+        </p>
+      </div>
+    );
+  }
 
   async function sauvegarder() {
     setOccupe("sauvegarde"); setErreur(null); setControles(null);

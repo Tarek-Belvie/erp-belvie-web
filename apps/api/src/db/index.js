@@ -184,7 +184,9 @@ async function chargerTablesAvecId(executant) {
 // Base
 // ------------------------------------------------------------------------------------------------
 function creerBase({ connectionString, options, pool: poolExistant, journal = null } = {}) {
-  const pool = poolExistant || new pg.Pool({ connectionString, options, max: Number(process.env.PG_POOL_MAX || 10) });
+  // Sur Vercel, chaque instance garde peu de connexions (la base en sert beaucoup d'instances).
+  const maxDefaut = process.env.VERCEL ? 3 : 10;
+  const pool = poolExistant || new pg.Pool({ connectionString, options, max: Number(process.env.PG_POOL_MAX || maxDefaut), idleTimeoutMillis: 30000 });
   // Une connexion inactive coupée par le serveur (redémarrage, bascule Neon, réseau) émet une
   // erreur sur le pool : sans ce gestionnaire, Node arrêterait tout le processus.
   pool.on("error", (err) => console.error(`[${new Date().toISOString()}] Connexion PostgreSQL perdue (pool) :`, err.message));
@@ -262,8 +264,19 @@ function creerBase({ connectionString, options, pool: poolExistant, journal = nu
     };
   }
 
+  // Exécute fn dans une transaction en LECTURE SEULE : toute écriture y est refusée par
+  // PostgreSQL. Utilisé pour toutes les routes GET (une lecture ne peut rien modifier, même par
+  // erreur). Compatible avec les pools de connexions en mode transaction (Neon, PgBouncer).
+  function lectureSeule(fn) {
+    return transaction(async () => {
+      await executant().query("SET TRANSACTION READ ONLY");
+      return fn();
+    })();
+  }
+
   const db = {
     moteur: "postgres",
+    lectureSeule,
     pool,
     prepare,
     transaction,
